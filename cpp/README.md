@@ -45,7 +45,23 @@ Cosa mi aspetto di poter leggere lì:
 | `AccessDenied` / `ATT-error=0x05` / `0x0F` | serve l'associazione/cifratura: rifai l'associazione in Windows |
 | `no reply within ...` ma `write status=Success` | comando inviato, nessuna risposta: provare `--register`, o `sniff` |
 
-## Build locale (facoltativa)
+## Build locale offline (senza scaricare l'exe)
+
+Servono il sorgente (GitHub: *Code → Download ZIP*, oppure `git clone`), un **compilatore
+MSVC** (Visual Studio o Build Tools con il carico di lavoro *Sviluppo di applicazioni desktop
+con C++*; il solo Windows SDK non contiene il compilatore) e un Windows SDK 10.0.17134 o più
+recente (per le intestazioni C++/WinRT). Poi, da un prompt qualsiasi:
+
+```bat
+cpp\build.bat
+build\ace.exe help
+```
+
+Lo script trova da solo Visual Studio con `vswhere`, imposta l'ambiente, compila i test del
+protocollo (e li esegue) e poi `ace.exe`, tutto in `cpp\build\`. Per scegliere un SDK preciso:
+`set WINSDK=10.0.26100.0` prima di lanciarlo. Nessuna connessione di rete è necessaria.
+
+## Build con CMake (alternativa)
 
 ```bat
 cmake -S cpp -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
