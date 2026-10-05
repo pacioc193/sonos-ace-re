@@ -62,6 +62,34 @@ class GettersAndReplies(unittest.TestCase):
         self.assertEqual(ace.loudness_command(True).hex(), "00022001")
 
 
+class Handshake(unittest.TestCase):
+    def test_registration_message_matches_capture_prefix(self):
+        # EXP-01/02/03b: 01 06 04 00 14 00 00 00 10 <16-byte token>
+        msg = ace.registration_message(ace.PLACEHOLDER_TOKEN)
+        self.assertEqual(msg.hex(), "010604001400000010" + "00" * 16)
+        self.assertEqual(len(msg), 25)
+        self.assertEqual(msg[:9], ace.REGISTRATION_PREFIX)
+
+    def test_registration_token_length_checked(self):
+        with self.assertRaises(ValueError):
+            ace.registration_message(bytes(15))
+
+    def test_setup_reply_accepted(self):
+        # the reply the phone gets (EXP-01/02/03b)
+        ok, text = ace.parse_setup_reply(bytes.fromhex("01070000020000"))
+        self.assertTrue(ok)
+
+    def test_setup_reply_rejected_cross_host(self):
+        # the reply Windows got replaying the same token (status 0x8001)
+        ok, text = ace.parse_setup_reply(bytes.fromhex("01070000028001"))
+        self.assertFalse(ok)
+        self.assertIn("8001", text)
+
+    def test_setup_reply_unexpected(self):
+        ok, _ = ace.parse_setup_reply(bytes.fromhex("dead"))
+        self.assertFalse(ok)
+
+
 class AgainstCapture(unittest.TestCase):
     """Re-encode every set command found in a real capture and compare byte for byte."""
 

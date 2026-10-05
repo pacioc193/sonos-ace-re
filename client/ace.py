@@ -39,7 +39,10 @@ MODES = {"off": 0x00, "anc": 0x01, "aware": 0x02, "transparency": 0x02}
 SERVICE_UUID = "0000fe07-0000-1000-8000-00805f9b34fb"
 CONTROL_WRITE_UUID = "c44f42b1-f5cf-479b-b515-9f1bb0099c9a"
 CONTROL_NOTIFY_UUID = "c44f42b1-f5cf-479b-b515-9f1bb0099c9b"
-SETUP_WRITE_UUID = "c44f42b1-f5cf-479b-b515-9f1bb0099c9e"  # unverified role
+# Setup/handshake characteristics (the "gate" before control). In the captures the
+# handshake rides handle 0x4e (write) / 0x50 (notify); the UUID binding is from the APK.
+SETUP_WRITE_UUID = "c44f42b1-f5cf-479b-b515-9f1bb0099c9e"
+SETUP_NOTIFY_UUID = "c44f42b1-f5cf-479b-b515-9f1bb0099c9f"
 
 ID_LOUDNESS = 0x20
 
@@ -51,12 +54,43 @@ GETTERS = {
     "volume": (0x03, 0x03), "info": (0x00, 0x03), "charging": (0x00, 0x04),
 }
 
-# Fixed 25-byte message seen in both captures on the secondary characteristic (handle
-# 0x004e) right before the first command. Unknown purpose; replayed as-is on request.
-# Registration message = 9-byte prefix + 16-byte access token. The real token is a
-# per-device credential bound to the phone (see protocol/AUTH.md) and is NOT committed;
-# the 16 bytes below are a redacted placeholder, not a working credential.
-REGISTRATION = bytes.fromhex("010604001400000010" + "00" * 16)
+# Handshake ("registration") written on the setup characteristic (handle 0x4e) right
+# before the first control command, identical across three captures (EXP-01/02/03b). It is
+# the gate: only after the accepted reply do control commands return SUCCESS instead of
+# NO_PERMISSIONS (protocol/AUTH.md). Message = 9-byte prefix + 16-byte access token (the
+# trailing 0x10 of the prefix is the token length). The real token is a per-device
+# credential bound to the phone's bond and is NOT committed; supply it with --token.
+REGISTRATION_PREFIX = bytes.fromhex("010604001400000010")
+PLACEHOLDER_TOKEN = bytes(16)  # redacted; not a working credential
+# Reply the phone receives on the setup notify characteristic when the handshake is
+# accepted (EXP-01/02/03b). A different host replaying the same bytes was rejected with
+# `01 07 00 00 02 80 01` (status 0x8001) -> the token is bound to the BLE identity.
+SETUP_REPLY_OK = bytes.fromhex("01070000020000")
+
+
+def registration_message(token: bytes = PLACEHOLDER_TOKEN) -> bytes:
+    """Build the setup-characteristic handshake: 9-byte prefix + 16-byte token."""
+    if len(token) != 16:
+        raise ValueError("token must be 16 bytes (32 hex digits)")
+    return REGISTRATION_PREFIX + token
+
+
+def parse_setup_reply(reply: bytes):
+    """Classify a setup/handshake reply. Returns (accepted: bool, text: str).
+
+    Accepted = the status word (last 2 bytes after the `02` length byte) is `00 00`,
+    i.e. the same reply the phone gets. `80 01` is the observed cross-host rejection.
+    """
+    if reply == SETUP_REPLY_OK:
+        return True, "accepted (same as the phone)"
+    if len(reply) >= 7 and reply[0] == 0x01 and reply[1] == 0x07 and reply[4] == 0x02:
+        status = reply[5:7]
+        if status == b"\x00\x00":
+            return True, "accepted"
+        if status == b"\x80\x01":
+            return False, "rejected (0x8001): token not valid for this host/bond (see AUTH.md)"
+        return False, f"rejected (status {status.hex()})"
+    return False, "unexpected reply: " + reply.hex()
 
 
 def int8(value: int) -> int:
@@ -186,11 +220,8 @@ async def run(args) -> None:
         replies: asyncio.Queue = asyncio.Queue()
         await client.start_notify(notify_char, lambda _c, data: replies.put_nowait(bytes(data)))
 
-        if args.register:
-            if not args.register_uuid:
-                sys.exit("--register needs --register-uuid (the secondary characteristic)")
-            await client.write_gatt_char(args.register_uuid, REGISTRATION, response=False)
-            await asyncio.sleep(0.3)
+        if not args.no_register:
+            await do_register(client, args)
 
         cmd = build(args)
         await client.write_gatt_char(write_char, cmd, response=False)
@@ -200,6 +231,42 @@ async def run(args) -> None:
             print(f"<- {reply.hex()}  {'(ack)' if is_ack(cmd, reply) and len(reply) == 4 else parse_reply(reply)}")
         except asyncio.TimeoutError:
             print("no reply within 3 s")
+
+
+async def do_register(client, args) -> None:
+    """Run the setup handshake exactly as the phone does in EXP-03b: enable the setup
+    notify characteristic, write the handshake, then read and classify the reply."""
+    setup_write = args.register_uuid or SETUP_WRITE_UUID
+    setup_notify = args.register_notify_uuid or SETUP_NOTIFY_UUID
+    if not client.services.get_characteristic(setup_write):
+        print(f"setup characteristic {setup_write} not found: skipping handshake "
+              "(run 'services', pass --register-uuid/--register-notify-uuid, or --no-register)")
+        return
+
+    token = PLACEHOLDER_TOKEN
+    if args.token:
+        token = bytes.fromhex(args.token)
+    msg = registration_message(token)
+
+    setup_replies: asyncio.Queue = asyncio.Queue()
+    have_notify = bool(client.services.get_characteristic(setup_notify))
+    if have_notify:
+        await client.start_notify(setup_notify, lambda _c, data: setup_replies.put_nowait(bytes(data)))
+    note = "" if args.token else " (placeholder token; not a working credential)"
+    print(f"-> setup {msg.hex()}{note}")
+    await client.write_gatt_char(setup_write, msg, response=False)
+    if not have_notify:
+        print("   setup notify characteristic not found: cannot read handshake reply")
+        await asyncio.sleep(0.3)
+        return
+    try:
+        reply = await asyncio.wait_for(setup_replies.get(), timeout=3)
+        accepted, text = parse_setup_reply(reply)
+        print(f"<- setup {reply.hex()}  {'OK' if accepted else 'FAIL'}: {text}")
+        if not accepted:
+            print("   control commands will likely return NO_PERMISSIONS until the handshake is accepted")
+    except asyncio.TimeoutError:
+        print("   no handshake reply within 3 s")
 
 
 def build(args) -> bytes:
@@ -234,11 +301,18 @@ def main(argv=None) -> None:
     ap.add_argument("value")
     ap.add_argument("--write-uuid")
     ap.add_argument("--notify-uuid")
-    ap.add_argument("--register", action="store_true", help="replay the fixed 17-byte registration first")
-    ap.add_argument("--register-uuid")
+    ap.add_argument("--no-register", action="store_true",
+                    help="skip the setup handshake (default: handshake first, like the phone app)")
+    ap.add_argument("--token", help="16-byte access token as 32 hex digits (default: redacted placeholder)")
+    ap.add_argument("--register-uuid", help="setup write characteristic (default: %(default)s)",
+                    default=SETUP_WRITE_UUID)
+    ap.add_argument("--register-notify-uuid", help="setup notify characteristic (default: %(default)s)",
+                    default=SETUP_NOTIFY_UUID)
     args = ap.parse_args(argv)
     try:
         build(args)  # validate the value before connecting
+        if args.token:
+            registration_message(bytes.fromhex(args.token))  # validate token length
     except ValueError as e:
         ap.error(str(e))
     asyncio.run(run(args))

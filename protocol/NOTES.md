@@ -25,12 +25,16 @@ identificatori di protocollo, nessun codice riprodotto qui).
 | Qualcomm GAIA (v3, upgrade) | `00001100-D102-11E1-9B23-00025B00A5A5`, `…1101`, `…1102`, `…1103` | P | APK (usato dall'app per l'aggiornamento firmware) |
 | CCCD | `00002902`, scritto `0100` per abilitare le notifiche | C | EXP-01/02 |
 | MTU | richiesta 512 | C | EXP-01/02 |
-| Corrispondenza handle ↔ UUID | **non verificata** (discovery GATT in cache nelle catture) | – | confermare con `ace.py services` |
+| Corrispondenza handle ↔ UUID | **non verificata** (discovery GATT in cache) | – | EXP-03b: il telefono rivalida la cache col *Database Hash* `0x2B2A` invece di rienumerare; confermare con `ace.py services` o cattura di un re-pairing |
 
-Il messaggio fisso su `0x004e` (identico in EXP-01 ed EXP-02):
+Il messaggio fisso su `0x004e` (identico in EXP-01, EXP-02 ed EXP-03b — 3 connessioni):
 `01 06 04 00 14 00 00 00 10 <16 byte: token di accesso, non incluso>`, risposta notify su `0x0050`:
-`01 07 00 00 02 00 00`. L'app contiene anche un'handshake "BLEv4" con CRC16: il legame
-con questo messaggio non è verificato. Nessuna autenticazione visibile sui comandi di controllo.
+`01 07 00 00 02 00 00`. È l'**handshake che fa da gate**: avviene una volta per connessione
+(tipicamente all'apertura dell'app), dopo aver abilitato il CCCD del canale setup; solo dopo la
+risposta `… 00 00` i comandi di controllo tornano `SUCCESS` (EXP-03b: zero `NO_PERMISSIONS`). Il
+token da 16 byte è **statico** (identico nelle 3 catture); il byte `10` ne è la lunghezza. L'app
+contiene anche un handshake "BLEv4" con CRC16: coerente ma non verificato byte-per-byte.
+Dettagli e ipotesi in [AUTH.md](AUTH.md). Nessuna autenticazione aggiuntiva sui singoli comandi.
 
 ## Framing: ACP (Accessory Control Protocol)
 

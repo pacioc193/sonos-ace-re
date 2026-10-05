@@ -18,15 +18,37 @@ non è autorizzato. Questo documento distingue nettamente:
 3. Prima dei comandi, il telefono fa **un solo scambio** sulla caratteristica di setup
    (`…9C9E` → `…9C9F`): write `01 06 04 00 14 00 00 00 10 <16 byte>` e risposta
    `01 07 00 00 02 00 00`. Nessun altro messaggio, nessun nonce sul filo. I 16 byte sono
-   **identici in due connessioni separate** ⇒ valore statico, non derivato per sessione.
+   **identici in tre connessioni separate** (EXP-01, EXP-02, EXP-03b) ⇒ valore statico,
+   non derivato per sessione né rigenerato a ogni apertura dell'app. Lo scambio avviene
+   **una volta per connessione** (tipicamente all'apertura/foreground dell'app) ed è il
+   *gate* che precede i comandi: solo dopo la risposta `… 00 00` i comandi ACP tornano
+   `SUCCESS` (EXP-03b: 27 risposte con status `00`, zero `NO_PERMISSIONS`). Il byte `10`
+   prima del token ne indica la lunghezza (16); il resto dell'header è coerente con
+   l'handshake BLEV4 ma non verificato byte-per-byte.
 4. Da Windows abbiamo inviato **gli stessi identici byte** e ottenuto `01 07 00 00 02 80 01`
    (diverso: rifiuto) invece di `… 00 00`. Richiesta identica, risposta diversa: l'unica
    variabile è il **peer Bluetooth**. ⇒ l'autorizzazione è **legata all'identità/bond del
    dispositivo** che l'ha stabilita, non al semplice contenuto del messaggio.
 
+5. La discovery GATT del telefono è **in cache**: nella riconnessione (EXP-03b) il telefono non
+   rienumera servizi/caratteristiche, ma legge solo il *Database Hash* (`0x2B2A`) e le *Server
+   Supported Features* (`0x2B3A`); trovando l'hash invariato riusa la mappa già nota. Perciò
+   `handle↔UUID` **non** è ricavabile dalle catture del telefono finché la cache resta valida.
+
 Conclusione solida: il controllo delle Sonos Ace è aperto **solo a un peer autorizzato**, e
 l'autorizzazione è vincolata al bond/identità Bluetooth. Riproporre i byte catturati da un
 altro host non basta.
+
+### Sull'ipotesi "handshake all'apertura dell'app" (EXP-03b)
+
+C'è effettivamente un handshake per-connessione (punto 3), quindi l'intuizione è corretta nella
+forma. **Ma non è dinamico**: su tre connessioni separate il token di 16 byte è bit-per-bit
+identico, quindi non viene negoziato/rigenerato all'apertura. L'apertura dell'app riusa lo stesso
+segreto statico, già associato durante il pairing. Le due letture compatibili con i dati —
+"handshake dinamico che però ridà sempre lo stesso valore a parità di bond" vs "token statico
+presentato dal bond" — restano indistinguibili sul filo; in entrambe la barriera pratica è la
+stessa (serve essere **quel** telefono). Un eventuale segreto *fresco* potrebbe esistere solo
+**fuori banda** (minting lato cloud quando l'app fa login), non visibile in una cattura BLE.
 
 ## Dedotto dal codice (confidenza media, da non sopravvalutare)
 

@@ -55,6 +55,30 @@ stato fatto, quando e cosa si è osservato. Nome file consigliato:
 - Conclusioni → [protocol/NOTES.md](../protocol/NOTES.md).
 - Log filtrato del tentativo precedente: causa probabile (non verificata) = Bluetooth non riavviato dopo il cambio di modalità snoop.
 
+### EXP-03b – Nuova connessione dal telefono: handshake all'apertura app (2026-10-05)
+- Ipotesi di partenza (utente): "all'apertura dell'app Sonos c'è un handshake".
+- File: `btsnoop_hci.log` (260 340 byte, fuori dal repo – su Drive dell'utente), cattura dal
+  Pixel 10 Pro, terza connessione del telefono alle Ace (stesso bond di EXP-01/02).
+- Flusso osservato (solo ATT/BLE; l'RFCOMM nel log è traffico **Pixel Watch / Wear OS**, da ignorare):
+  1. `tx 0x51 = 0100` abilita le notifiche sul CCCD del canale *setup*.
+  2. `tx 0x4e` **handshake**: `01 06 04 00 14 00 00 00 10 <16 byte>` (il byte `10` = lunghezza 16 del token).
+  3. `rx 0x50` risposta `01 07 00 00 02 00 00` → status `00 00` (**OK**).
+  4. `tx 0x41` / `tx 0x47 = 0100` abilitano i CCCD del canale di controllo.
+  5. `tx 0x44` comandi ACP, ack su `0x46`: **27× status `00` (SUCCESS)**, 10× `02` (COMMAND_NOT_SUPPORTED),
+     2× `05` (INVALID_STATE), **0× `09` (NO_PERMISSIONS)**.
+- Confronto token: i **16 byte dell'handshake sono identici** in EXP-01, EXP-02 ed EXP-03b (tre
+  connessioni separate) ⇒ **valore statico**, non rigenerato per sessione/apertura.
+- GATT in cache: il telefono **non** rifà la discovery; legge solo il *Database Hash* (char `0x2B2A`,
+  handle `0x0008` sull'Ace = `d994c3f9165b746506af2baeaa89c461`) e le *Server Supported Features*
+  (`0x2B3A`). Hash invariato ⇒ cache valida ⇒ **handle↔UUID ancora non ottenibili** da questo log.
+  Le letture `read_req/read_rsp` su handle alti (132, 63, 106…) sono l'**Ace che legge dal telefono**
+  (il telefono fa da GATT server: ora/Fast Pair/…), non il contrario.
+- Conclusioni → [protocol/AUTH.md](../protocol/AUTH.md) e [protocol/NOTES.md](../protocol/NOTES.md):
+  l'handshake all'apertura **esiste ed è il gate** del controllo, ma presenta un token **statico**
+  legato al bond; confermato il rifiuto cross-host (stessi byte da Windows → `80 01`).
+- Prossimo per handle↔UUID: cattura durante un **re-pairing** (svuota la cache GATT) oppure discovery
+  live dal nostro client (`ace.py services`).
+
 ### (superato) Prossimo esperimento dopo EXP-01
 Una sola azione per volta, in questo ordine, con 10 s di pausa e annotando l'ordine:
 1. ANC **on** → 2. Trasparenza (Aware) → 3. ANC off → 4. "Amplificatore suoni" on.

@@ -16,6 +16,12 @@ python3 client/ace.py <addr> raw 00020f01         # comando arbitrario, stampa l
 
 Gli UUID non sono ancora noti: senza `--write-uuid`/`--notify-uuid` il client prova a
 riconoscere il servizio personalizzato con una caratteristica *write-without-response* e
-una *notify*. Se non funziona, lancia `services` e passa gli UUID a mano. Prima del
-primo comando potrebbe servire `--register --register-uuid <uuid>` (messaggio fisso
-visto nelle catture). Chiudi l'app Sonos sul telefono prima di provare.
+una *notify*. Se non funziona, lancia `services` e passa gli UUID a mano.
+
+**Handshake (default).** Prima dei comandi il client esegue l'handshake sul canale di
+setup come fa il telefono (EXP-03b): abilita la notify, scrive `01 06 04 00 14 00 00 00 10
+<16 byte token>` e classifica la risposta (`… 00 00` = accettato, `… 80 01` = rifiutato).
+Senza un token valido usa un placeholder: i comandi torneranno `NO_PERMISSIONS`. Passa il
+tuo con `--token <32 cifre hex>`. Disattiva lo step con `--no-register`. Il token è una
+credenziale legata al bond del telefono (vedi [../protocol/AUTH.md](../protocol/AUTH.md)):
+riproporlo da un altro host viene rifiutato. Chiudi l'app Sonos sul telefono prima di provare.
