@@ -196,6 +196,11 @@ Analisi delle 4 catture per rispondere a "come/quando l'app ottiene il token da 
 - **Natura del canale vendor: non confermata.** Candidati: ARP/AAP (registrazione/auth accessorio) del
   codice, **oppure** negoziazione sicura **Qualcomm aptX Adaptive/Lossless** (“in-use” = codec/link in
   uso) — spiegherebbe perché manca in EXP-01 se lì non si è negoziato aptX. Da distinguere con RE.
+- **Verifica "in EXP-01 l'abbiamo solo mancato perché l'app era già aperta" → NO.** EXP-01 cattura una
+  connessione classic-BT **nuova dall'inizio**: avvio HFP `AT+BRSF` @ 1.4 s e 48 frame SDP. Il canale
+  vendor (DLCI 44/45) **non è mai stato aperto** (solo DLCI 20). Confronto: EXP-04 (nuova, `AT+BRSF`@1.7s,
+  66 SDP) e EXP-03b (nuova, 34 SDP) **hanno** il canale; EXP-01 no. ⇒ il canale è **condizionale**
+  (dipende da feature/stato), non un artefatto di cattura, e comunque non necessario al controllo BLE.
 - **Rilettura di EXP-06 (Windows):** il nostro client è solo-BLE e salta tutto il classic-BT, ma poiché
   EXP-01 controlla senza il canale vendor, il rifiuto di Windows resta spiegato soprattutto dal
   **legame all'identità/bond** (token giusto, peer sbagliato), non dalla mancanza di questo scambio.
