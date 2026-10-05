@@ -8,6 +8,9 @@ Fonti: **EXP-01/EXP-02** = catture HCI ([../captures/EXPERIMENTS.md](../captures
 **APK** = nomi e valori numerici degli identificatori nell'app Sonos 89.01.11 (solo
 identificatori di protocollo, nessun codice riprodotto qui).
 
+> **Autorizzazione:** il canale di controllo richiede un client autenticato. Senza
+> autenticazione ogni comando riceve `NO_PERMISSIONS`. Vedi [AUTH.md](AUTH.md).
+
 ## Trasporto: GATT su BLE
 
 | Voce | Valore | Conf. | Evidenza |

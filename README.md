@@ -13,9 +13,10 @@ Al momento non risultano progetti pubblici che documentino questo protocollo.
 |---|---|
 | Scaffold, tool di estrazione | ✅ |
 | Cattura HCI snoop da Pixel 10 Pro | ⏳ da fare |
-| Identificazione trasporto (RFCOMM / GATT) | ⏳ |
-| Mappatura comandi ANC/Aware | ⏳ |
-| Client PoC | ⏳ |
+| Trasporto: GATT/BLE, servizio 0xFE07 | ✅ |
+| Protocollo comandi ACP (ANC, EQ, balance, ...) | ✅ |
+| Client PoC (Python + C++/WinRT) | ✅ comandi, ⛔ bloccato dall'auth |
+| Autorizzazione (ASP/ARP/AAP, cloud) | 🔒 barriera crittografica, vedi [protocol/AUTH.md](protocol/AUTH.md) |
 
 ## Approccio
 
