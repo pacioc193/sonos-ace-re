@@ -1,0 +1,23 @@
+# Raw captures: contain BT addresses and link keys
+*.log
+*.log.last
+*.cfa
+*.pcap
+*.pcapng
+*.btsnoop
+bugreport*.zip
+bugreport*/
+FS/
+
+# Sonos binaries and decompiled output: never commit
+*.apk
+*.apks
+*.xapk
+*.so
+jadx*/
+work/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
