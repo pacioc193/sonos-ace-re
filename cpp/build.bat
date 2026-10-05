@@ -21,6 +21,12 @@ if not defined VSPATH (
 echo [INF] Visual Studio: %VSPATH%
 call "%VSPATH%\VC\Auxiliary\Build\vcvars64.bat" %WINSDK% >nul || exit /b 1
 echo [INF] Windows SDK: %WindowsSDKVersion%
+echo [INF] MSVC toolset: %VCToolsVersion%
+
+rem VS2017 (MSVC 14.1x) has no /std:c++20: use C++17 + the /await coroutines that C++/WinRT needs there.
+set "STDFLAGS=/std:c++20"
+echo %VCToolsVersion%| findstr /b "14.1" >nul && set "STDFLAGS=/std:c++17 /await"
+echo [INF] language flags: %STDFLAGS%
 
 if not exist build mkdir build
 
@@ -28,8 +34,8 @@ echo [INF] building protocol tests...
 cl /nologo /std:c++17 /EHsc /W3 /utf-8 tests\test_core.cpp /Fe:build\ace_tests.exe /Fo:build\ || exit /b 1
 build\ace_tests.exe || exit /b 1
 
-echo [INF] building ace.exe (C++/WinRT, C++20, static CRT)...
-cl /nologo /std:c++20 /EHsc /permissive- /utf-8 /W3 /MT /DNOMINMAX /DWIN32_LEAN_AND_MEAN /D_CRT_SECURE_NO_WARNINGS ^
+echo [INF] building ace.exe (C++/WinRT, static CRT)...
+cl /nologo %STDFLAGS% /EHsc /permissive- /utf-8 /W3 /MT /DNOMINMAX /DWIN32_LEAN_AND_MEAN /D_CRT_SECURE_NO_WARNINGS ^
    app\ace_cli.cpp /Fe:build\ace.exe /Fo:build\ /link windowsapp.lib || exit /b 1
 
 echo.

@@ -57,7 +57,7 @@ cpp\build.bat
 build\ace.exe help
 ```
 
-Lo script trova da solo Visual Studio con `vswhere`, imposta l'ambiente, compila i test del
+Con Visual Studio 2017 usa `/std:c++17 /await`, con 2019 o più recente `/std:c++20` (scelta automatica). Lo script trova da solo Visual Studio con `vswhere`, imposta l'ambiente, compila i test del
 protocollo (e li esegue) e poi `ace.exe`, tutto in `cpp\build\`. Per scegliere un SDK preciso:
 `set WINSDK=10.0.26100.0` prima di lanciarlo. Nessuna connessione di rete è necessaria.
 
