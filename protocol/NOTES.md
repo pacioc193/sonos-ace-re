@@ -61,13 +61,21 @@ checksum o contatore di sequenza osservato nei comandi 0x44.
 ### Controllo rumore: `00 02 0f vv`
 
 Osservato in EXP-01: 9 comandi consecutivi, intervallo ≈ 1.2–1.7 s, valori
-`02, 00, 01, 02, 00, 01, 02, 00, 01` (tre giri di tre modalità). Ogni comando riceve
-l'ack `02 02 0f 00` (stato 00 = ok, senza eco del valore).
+`02, 00, 01, 02, 00, 01, 02, 00, 01`. Ogni comando riceve l'ack `02 02 0f 00`
+(stato 00 = ok, senza eco del valore).
 
-- Valori usati: **`00`, `01`, `02`** = le tre modalità. **Quale sia quale non è ancora
-  determinato**: serve l'ordine esatto delle azioni nell'app (vedi EXP-01 e EXP-02).
-- Ipotesi: una sola caratteristica/comando per tutte le modalità (ANC, Aware,
-  off); nessun livello continuo visto (solo 3 valori distinti).
+Ordine delle azioni dichiarato dall'utente: partenza in cancellazione attiva, poi tre
+cicli **trasparenza → off → cancellazione attiva**.
+
+| vv | Modalità | Conf. | Evidenza |
+|---|---|---|---|
+| `02` | Trasparenza (Aware) | P | 1º comando di ogni ciclo |
+| `00` | Off | P | 2º comando di ogni ciclo |
+| `01` | Cancellazione attiva (ANC) | P | 3º comando di ogni ciclo; coerente con la lettura iniziale `00 04 07` → `02 04 07 00 01` (stato ANC all'avvio) |
+
+- Mappatura dedotta dall'ordine, non da tre esperimenti separati: conferma definitiva con EXP-02.
+- Nessun livello continuo visto (solo 3 valori distinti).
+- Ipotesi: `00 04 07` = lettura dello stato corrente della modalità (stessa codifica: 01 = ANC).
 
 ### Eventi non richiesti (notify, prefisso `01`)
 
@@ -78,7 +86,7 @@ l'ack `02 02 0f 00` (stato 00 = ok, senza eco del valore).
 
 ## Domande aperte
 
-- Mappatura esatta valore → modalità (ANC / Aware / off / "amplificatore suoni").
+- Conferma della mappatura 02/00/01 con esperimenti separati, e valore per "amplificatore suoni".
 - "Amplificatore suoni" è un valore di `0f` o un comando diverso?
 - Esistono parametri di livello per Aware (campo aggiuntivo) o è solo on/off?
 - Lo stato cambiato dal tasto fisico viene notificato (`01 …`)? Con quale formato?

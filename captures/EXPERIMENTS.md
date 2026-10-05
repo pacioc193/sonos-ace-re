@@ -35,14 +35,14 @@ stato fatto, quando e cosa si è osservato. Nome file consigliato:
 ### EXP-01 – Primo log: connessione + 3 cicli di modalità (2026-10-05)
 - Dispositivo: Pixel 10 Pro, snoop HCI attivo, bugreport del 2026-10-05 10:39.
 - File: `btsnoop_hci.log` (398 588 byte, fuori dal repo – su Drive dell'utente).
-- Azioni: l'utente ha ciclato più volte tra le modalità dell'app ("ON → trasparenza →
-  OFF"); orari e ordine esatti **non annotati**.
+- Azioni: partenza in cancellazione attiva, poi 3 cicli trasparenza → off → cancellazione
+  attiva (ordine confermato dall'utente); orari esatti non annotati.
 - Osservazioni: 9 comandi `00 02 0f vv` con vv = 02,00,01,02,00,01,02,00,01, ciascuno
   con ack `02 02 0f 00`. Handshake/lettura iniziale con comandi `00 <cat> <id>` e
   risposte `02 <cat> <id> …` su handle ATT 0x0044/0x0046. Nel log compaiono anche
   Pixel Watch e un terzo dispositivo, da ignorare.
 - Conclusioni → [protocol/NOTES.md](../protocol/NOTES.md): trasporto GATT/BLE, comando
-  modalità `00 02 0f vv`. **Manca la mappatura valore → modalità.**
+  modalità `00 02 0f vv`. Mappatura dedotta: 02 = trasparenza, 00 = off, 01 = ANC.
 - Prossimo: EXP-02 con ordine annotato (vedi sotto).
 
 ### Prossimo esperimento (EXP-02, per la mappatura)
