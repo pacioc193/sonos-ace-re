@@ -180,6 +180,27 @@ Analisi delle 4 catture per rispondere a "come/quando l'app ottiene il token da 
   (es. `Plutoberth/SonyHeadphonesClient`, client desktop per Sony), ma quei protocolli **non hanno**
   questo gate di autorizzazione legato al bond: Sonos è un caso più chiuso.
 
+### EXP-10 – La connessione completa: canale vendor su classic-BT prima dell'handshake BLE (2026-10-05)
+- Spunto (utente): "non ci stiamo perdendo messaggi? una connessione/handshake prima dell'auth?
+  L'app ci mette diversi secondi a entrare in settings."
+- Guardando **tutti** i canali verso l'Ace (non solo ATT), i "diversi secondi" sono la **connessione
+  classic-BT completa**: SDP (PSM 1), **HFP** (RFCOMM DLCI 8/20, comandi AT), **A2DP/AVRCP** (L2CAP
+  PSM 25/23), e un **canale vendor RFCOMM** (DLCI 44/45).
+- **Canale vendor (namespace `0x07`)**: scambio **challenge-response per-sessione a blocchi da 16 byte**,
+  con marcatore ASCII `in-use`, che **precede** l'handshake BLE su `…9C9E`:
+  `07 41 ..“in-use”.. <16B>`, `07 40 00 <16B>` + `07 42 00 <16B>`, ack `ff 01 .. 0740 00 / 0742 00`.
+  I blob cambiano a ogni sessione (crypto). Presente in EXP-02 (DLCI 44), EXP-03b/04 (DLCI 44/45).
+- **Contro-dato decisivo:** in **EXP-01 questo canale è ASSENTE** (solo HFP), **ma il controllo BLE
+  ha funzionato lo stesso** (9 comandi `00 02 0f vv` con ack `02 02 0f 00`). ⇒ il canale vendor
+  **NON è il gate del controllo BLE**: il gate resta il token su `…9C9E` validato contro l'identità.
+- **Natura del canale vendor: non confermata.** Candidati: ARP/AAP (registrazione/auth accessorio) del
+  codice, **oppure** negoziazione sicura **Qualcomm aptX Adaptive/Lossless** (“in-use” = codec/link in
+  uso) — spiegherebbe perché manca in EXP-01 se lì non si è negoziato aptX. Da distinguere con RE.
+- **Rilettura di EXP-06 (Windows):** il nostro client è solo-BLE e salta tutto il classic-BT, ma poiché
+  EXP-01 controlla senza il canale vendor, il rifiuto di Windows resta spiegato soprattutto dal
+  **legame all'identità/bond** (token giusto, peer sbagliato), non dalla mancanza di questo scambio.
+  (Confondente: Windows ha anche un bond diverso; non si possono separare del tutto le due cose.)
+
 ### (superato) Prossimo esperimento dopo EXP-01
 Una sola azione per volta, in questo ordine, con 10 s di pausa e annotando l'ordine:
 1. ANC **on** → 2. Trasparenza (Aware) → 3. ANC off → 4. "Amplificatore suoni" on.
