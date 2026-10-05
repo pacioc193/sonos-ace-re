@@ -69,9 +69,25 @@ salvato al primo setup.
 
 Evidenza dalle catture (EXP-07): i 16 byte compaiono **solo come scrittura in uscita**, mai ricevuti
 via radio, e sono **identici anche nella cattura dell'associazione** → preesistono e non vengono
-rigenerati al pairing. Origine più probabile: **provisioning cloud legato all'account** al primissimo
-setup. Non dimostrato: serve la cattura del **primo setup dopo factory reset** + **traffico HTTPS** del
-telefono.
+rigenerati al pairing.
+
+**Correzione importante (EXP-08, ragionamento): la validazione è LOCALE sull'Ace, non sul cloud.**
+Le Ace non hanno un percorso internet durante la sessione e nelle catture **accettano il token
+completamente offline** (EXP-01/02). Quindi il controllo del token lo fa **l'Ace stessa**, in locale,
+contro l'identità/bond BLE del peer — il cloud non può essere nel percorso di verifica in tempo reale.
+Ne segue che il token è un **segreto condiviso localmente** (Ace ↔ controller), stabilito al
+**primissimo pairing** e poi solo *ripresentato*. Lo scambio **AAP su RFCOMM DLCI 44** (challenge-
+response a 16 byte, EXP-07) è il candidato per quel key-establishment locale. La precedente ipotesi
+"provisioning cloud" va ridimensionata: il cloud/account, se interviene, può al più **sbloccare/avviare**
+il primo setup nell'app, ma **non valida** le connessioni successive. Questo **riapre la fattibilità** di
+un client autonomo: se la registrazione è locale, un client che rifà il primo bond può ottenere un
+**proprio** token ed essere autorizzato offline.
+
+**Test decisivo (EXP-08, da fare):** factory reset delle Ace → telefono in **modalità aereo** (niente
+Wi-Fi/dati) → tentare il **primo setup** nell'app Sonos.
+- setup completato offline e controllo funzionante ⇒ token **locale**, nessun cloud necessario ⇒ client autonomo fattibile;
+- app che rifiuta senza internet ⇒ il cloud fa da **gate** alla sola registrazione.
+In parallelo resta utile la cattura del primo setup (HCI snoop; + HTTPS solo se il telefono è online).
 
 **Piano di RE statico mirato** (sull'APK, solo identificatori/struttura — niente codice nel repo):
 - cercare *dove si costruisce* la scrittura `01 06 04 00 14 00 00 00 10` (prefisso del setup) o il

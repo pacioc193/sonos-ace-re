@@ -152,6 +152,18 @@ Analisi delle 4 catture per rispondere a "come/quando l'app ottiene il token da 
   nell'app. Per *vederlo* nascere serve una cattura del **primo setup dopo factory reset** +
   **traffico di rete (HTTPS)** del telefono, non solo l'HCI snoop.
 
+### EXP-08 – Validazione locale vs cloud: setup offline (da fare)
+- Premessa (ragionamento): le Ace **non hanno internet** durante la sessione e nelle catture
+  accettano il token **offline** (EXP-01/02) ⇒ la validazione è **locale sull'Ace**, non sul cloud.
+  Il token è quindi un **segreto condiviso localmente**, stabilito al primissimo pairing (candidato:
+  lo scambio AAP su DLCI 44, EXP-07) e poi solo ripresentato. Vedi [protocol/AUTH.md](../protocol/AUTH.md).
+- **Test decisivo:** factory reset delle Ace → telefono in **modalità aereo** (no Wi-Fi/dati) → primo
+  setup nell'app Sonos.
+  - completa offline + controllo ok ⇒ registrazione **locale**, cloud non necessario ⇒ client autonomo fattibile;
+  - app rifiuta senza rete ⇒ cloud fa da **gate** alla sola registrazione iniziale.
+- In parallelo: HCI snoop del primo setup (per vedere SMP/bond + AAP + eventuale scrittura del token su `…9C9E`).
+- Esito/osservazioni: _(da compilare dopo il test)_
+
 ### (superato) Prossimo esperimento dopo EXP-01
 Una sola azione per volta, in questo ordine, con 10 s di pausa e annotando l'ordine:
 1. ANC **on** → 2. Trasparenza (Aware) → 3. ANC off → 4. "Amplificatore suoni" on.
