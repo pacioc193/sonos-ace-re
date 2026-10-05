@@ -74,6 +74,10 @@ int main() {
     CHECK(ace::registration_message(ace::kPlaceholderToken).size() == 25);
     CHECK(throws([] { ace::registration_message(ace::Bytes(15)); }));
     CHECK(ace::random_token().size() == 16);
+    // setup/handshake reply verdict (EXP-01..06)
+    CHECK(ace::setup_reply_verdict(ace::from_hex("01070000020000")) == 1);   // phone: accepted
+    CHECK(ace::setup_reply_verdict(ace::from_hex("01070000028001")) == 0);   // Windows: rejected (0x8001)
+    CHECK(ace::setup_reply_verdict(ace::from_hex("dead")) == -1);            // short/unexpected
 
     if (failures) {
         std::cerr << failures << " test(s) failed\n";

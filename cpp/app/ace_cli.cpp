@@ -468,7 +468,15 @@ class Link {
             return;
         }
         const ace::Bytes r = setup_inbox.front();
-        g_log.info("registration reply: " + ace::to_hex(r, " ") + (r == ace::from_hex("01070000020000") ? "   (same as the phone got)" : "   (differs from the phone's 01 07 00 00 02 00 00)"));
+        const int v = ace::setup_reply_verdict(r);
+        const std::string verdict =
+            v == 1 ? "   ACCEPTED (same as the phone)"
+                   : v == 0 ? "   REJECTED: token not valid for this host/bond (see protocol/AUTH.md); control will be NO_PERMISSIONS"
+                            : "   UNEXPECTED reply";
+        g_log.info("registration reply: " + ace::to_hex(r, " ") + verdict);
+        if (v != 1)
+            g_log.warn("not authorized: this host is not the bonded peer. The 16-byte token is correct bytes but "
+                       "the Ace binds authorization to the phone's BLE identity (EXP-06).");
     }
 
     GattCharacteristic find_char(const std::string& uuid, BluetoothCacheMode mode) {

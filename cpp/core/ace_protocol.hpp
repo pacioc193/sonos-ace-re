@@ -47,6 +47,19 @@ inline Bytes random_token() {
     return t;
 }
 
+// Accepted setup reply the phone receives (EXP-01/02/03b/04). A different host replaying the
+// same token is rejected with `01 07 00 00 02 80 01` (status 0x8001, reproduced in EXP-06).
+inline const Bytes kSetupReplyOk = {0x01, 0x07, 0x00, 0x00, 0x02, 0x00, 0x00};
+
+// Classify a setup/handshake reply. result: 1 = accepted, 0 = rejected, -1 = unexpected/short.
+inline int setup_reply_verdict(const Bytes& r) {
+    if (r.size() >= 7 && r[0] == 0x01 && r[1] == 0x07 && r[4] == 0x02) {
+        if (r[5] == 0x00 && r[6] == 0x00) return 1;
+        return 0;  // e.g. 0x8001: token not valid for this host/bond
+    }
+    return -1;
+}
+
 constexpr uint8_t kCatSettings = 0x02;
 constexpr uint8_t kIdMode = 0x0F;
 constexpr uint8_t kIdBass = 0x1E;

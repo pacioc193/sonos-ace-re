@@ -115,6 +115,23 @@ stato fatto, quando e cosa si è osservato. Nome file consigliato:
 - Da verificare al prossimo giro: con il telefono spento, se l'handshake su `…9C9E` riceve
   `… 00 00` (accettato) o `… 80 01` (rifiutato) con `--token=<reale>`.
 
+### EXP-06 – Prova definitiva dell'auth: token reale rifiutato da Windows (2026-10-05)
+- Setup: `ace.exe` (build con discovery robusta), Ace associate a Windows, `--token=<token reale
+  catturato dal telefono>`.
+- **Telefono acceso** — l'intera catena arriva fino in fondo e il rifiuto è netto:
+  - handshake su `…9C9E`: `TX 01 06 04 00 14 00 00 00 10 <token reale>` → `RX 01 07 00 00 02 80 01`
+    (**rifiutato**, status `0x8001`; il telefono riceve `… 00 00`).
+  - comando `00 02 0e` (GetAncMode) → `02 02 0e 09` = **NO_PERMISSIONS**.
+- **Telefono spento** — dopo la scrittura dell'handshake il link LE **cade** (`Disconnected`), nessuna
+  risposta entro 3 s; riconnette ma anche il comando resta senza risposta. Nessuna autorizzazione.
+- **Conclusione (definitiva):** gli **stessi identici byte** del token, inviati da Windows, sono
+  rifiutati (`0x8001`) e i comandi tornano `NO_PERMISSIONS`. Riproduce sul dispositivo, con il token
+  vero, ciò che era in [AUTH.md](../protocol/AUTH.md): **l'autorizzazione è legata al bond/identità
+  BLE del telefono**, non al contenuto del messaggio. Il token da solo non basta da un altro host.
+- Vie rimaste: (a) presentarsi come quel bond (clonare chiavi/identità BLE del telefono — protette
+  sul telefono, non fattibile); (b) **registrare il PC come nuovo peer autorizzato** — richiede
+  catturare l'associazione (re-pairing) per capire come nasce il token legato all'identità del PC.
+
 ### (superato) Prossimo esperimento dopo EXP-01
 Una sola azione per volta, in questo ordine, con 10 s di pausa e annotando l'ordine:
 1. ANC **on** → 2. Trasparenza (Aware) → 3. ANC off → 4. "Amplificatore suoni" on.

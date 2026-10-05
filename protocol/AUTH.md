@@ -29,6 +29,12 @@ non è autorizzato. Questo documento distingue nettamente:
    (diverso: rifiuto) invece di `… 00 00`. Richiesta identica, risposta diversa: l'unica
    variabile è il **peer Bluetooth**. ⇒ l'autorizzazione è **legata all'identità/bond del
    dispositivo** che l'ha stabilita, non al semplice contenuto del messaggio.
+   **EXP-06 (riproduzione sul device col token reale):** con `ace.exe --token=<token reale del
+   telefono>` e handle↔UUID ormai confermati, l'handshake su `…9C9E` riceve ancora `… 80 01` e il
+   primo comando `00 02 0e` (GetAncMode) torna `02 02 0e 09` = `NO_PERMISSIONS`. La catena completa
+   (handshake rifiutato → comando negato) è quindi dimostrata con il credenziale vero, non solo con
+   il placeholder. (Col telefono *spento* il link LE cade subito dopo la scrittura dell'handshake:
+   nessuna risposta — comunque nessuna autorizzazione.)
 
 5. La discovery GATT del telefono è **in cache**: nella riconnessione (EXP-03b) il telefono non
    rienumera servizi/caratteristiche, ma legge solo il *Database Hash* (`0x2B2A`) e le *Server
