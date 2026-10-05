@@ -132,6 +132,26 @@ stato fatto, quando e cosa si è osservato. Nome file consigliato:
   sul telefono, non fattibile); (b) **registrare il PC come nuovo peer autorizzato** — richiede
   catturare l'associazione (re-pairing) per capire come nasce il token legato all'identità del PC.
 
+### EXP-07 – RE di protocollo dalle catture: origine della chiave (2026-10-05)
+Analisi delle 4 catture per rispondere a "come/quando l'app ottiene il token da 16 byte".
+- **Il token non è mai ricevuto in-band.** In tutte e 4 le catture i 16 byte (`51468da4…`) compaiono
+  **una sola volta e solo come `tx`** (scrittura sul canale setup `…9C9E`): mai letti da una
+  caratteristica, mai ricevuti dalle cuffie. ⇒ l'app li ha **già memorizzati**, non li ottiene
+  durante la connessione né durante le associazioni catturate.
+- **Token identico anche nell'associazione (EXP-02).** Quindi non viene rigenerato a ogni pairing:
+  è stabile per (dispositivo, account) e preesiste alle catture.
+- **Nuovo canale: AAP su RFCOMM (classic BT), DLCI 44**, presente **solo in EXP-02** (la cattura con
+  l'associazione). Non è HFP (DLCI 20 = comandi AT). Framing `<gruppo> <pdu> <len16> <payload>`,
+  con un namespace `0x07` che porta un **challenge-response a blocchi da 16 byte**:
+  `07 41 .."in-use".. <16B>`, `07 40 00 <16B>` + `07 42 00 <16B>`, risposta `07 34 ..`, ack `ff ..`.
+  I blob da 16 byte **cambiano a ogni round** → nonce/challenge **per-sessione**, non una chiave fissa.
+  (Interpretazione: probabile ARP/AAP del codice; struttura osservata, semantica da confermare.)
+- **L'unico rx di 16 byte su BLE** (handle `0x1d`) è **Google Fast Pair** (char `fe2c1234`), non il token.
+- **Conclusione (P):** il token BLE statico non nasce da uno scambio BLE riproducibile; coerente con un
+  **provisioning fuori banda** (cloud Sonos legato all'account) al primissimo setup, poi salvato
+  nell'app. Per *vederlo* nascere serve una cattura del **primo setup dopo factory reset** +
+  **traffico di rete (HTTPS)** del telefono, non solo l'HCI snoop.
+
 ### (superato) Prossimo esperimento dopo EXP-01
 Una sola azione per volta, in questo ordine, con 10 s di pausa e annotando l'ordine:
 1. ANC **on** → 2. Trasparenza (Aware) → 3. ANC off → 4. "Amplificatore suoni" on.

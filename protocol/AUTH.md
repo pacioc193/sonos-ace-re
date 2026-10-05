@@ -58,6 +58,38 @@ stessa (serve essere **quel** telefono). Un eventuale segreto *fresco* potrebbe 
 EXP-04: aprire l'app più volte sulla **stessa** connessione LE non ripete l'handshake; serve una
 vera disconnessione fra le aperture per osservare handshake separati.
 
+### Il token è nell'APK? Da dove arriva? (EXP-07)
+
+**No, non come costante compilata.** EXP-06 mostra che gli stessi byte da un peer diverso sono
+rifiutati: il valore è legato a *questo* telefono/associazione, quindi **non può** essere un literal
+di build (sarebbe uguale per tutti gli utenti e autorizzerebbe qualunque Ace). Quando l'app
+costruisce la scrittura `01 06 … <16B>`, il token **non** proviene da una stringa dell'APK ma è
+**letto a runtime dallo storage locale** (SharedPreferences/DB/Android Keystore), dove è stato
+salvato al primo setup.
+
+Evidenza dalle catture (EXP-07): i 16 byte compaiono **solo come scrittura in uscita**, mai ricevuti
+via radio, e sono **identici anche nella cattura dell'associazione** → preesistono e non vengono
+rigenerati al pairing. Origine più probabile: **provisioning cloud legato all'account** al primissimo
+setup. Non dimostrato: serve la cattura del **primo setup dopo factory reset** + **traffico HTTPS** del
+telefono.
+
+**Piano di RE statico mirato** (sull'APK, solo identificatori/struttura — niente codice nel repo):
+- cercare *dove si costruisce* la scrittura `01 06 04 00 14 00 00 00 10` (prefisso del setup) o il
+  valore della caratteristica `…9C9E`: la classe che assembla quel buffer rivela da quale campo
+  prende i 16 byte;
+- seguire a ritroso quel campo: è letto da **storage locale** (prefs/DB/Keystore) o da una **risposta
+  di rete** (registrazione ARP/cloud)? Il nome della chiave/DAO lo dice;
+- classi candidate: `SetupOperation`, `AccessoryAuthenticationProtocolClient` / ARP / ASP,
+  `bluetooth.blev4.SonosBlev4Client`, e il canale **AAP su RFCOMM** (DLCI 44, namespace `0x07`,
+  EXP-07) con PDU `0x40/0x41/0x42` a blocchi da 16 byte;
+- stringhe utili da grepare: `in-use`, `token`, `accessKey`/`access_key`, `PRIMARY_ACCESS`,
+  `COMMON_ACCESS`, `ISSUER`, `household`, `register`, `credential`.
+
+**Attenzione (vale anche se lo troviamo):** localizzare o estrarre il token **non** abilita il
+controllo dal PC, perché l'autorizzazione è legata all'**identità BLE** del telefono (EXP-06). La
+strada utile che il RE deve chiarire non è "trovare il token", ma **come si registra un nuovo
+controller** (così il PC diventa un peer autorizzato con un proprio token).
+
 ## Dedotto dal codice (confidenza media, da non sopravvalutare)
 
 Tracciando le classi (package `com.sonos.sdk.*`, non offuscato):
