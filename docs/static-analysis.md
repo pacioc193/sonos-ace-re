@@ -67,3 +67,19 @@ frida -U -f com.sonos.acr2 -l work/hook.js
 
 Riportare in [../protocol/NOTES.md](../protocol/NOTES.md) solo le **conclusioni**
 (UUID, formato, significato dei campi), non il codice decompilato.
+
+## 5. Metodo usato senza jadx (solo Python)
+
+Quando jadx non è disponibile, `androguard` (pip) legge i file `classes*.dex` estratti dall'APK:
+
+```python
+from androguard.core.dex import DEX
+d = DEX(open("classes4.dex", "rb").read())
+strings = d.get_strings()                      # UUID, nomi di tabelle, ecc.
+for c in d.get_classes(): print(c.get_name())  # i pacchetti SDK non sono offuscati
+```
+
+Nell'app Sonos le classi sotto `com.sonos.sdk.*` hanno nomi leggibili (R8 offusca il resto):
+i `*PduId` generati contengono nome e identificatore numerico di ogni comando, e
+`HeadphonesGattSpec` gli UUID dei canali. Il risultato è riassunto in
+[../protocol/NOTES.md](../protocol/NOTES.md); i file dex restano fuori dal repo (`*.dex` è ignorato).

@@ -45,6 +45,23 @@ class CommandEncoding(unittest.TestCase):
         self.assertFalse(ace.is_ack(cmd, bytes.fromhex("02021e01")))
 
 
+class GettersAndReplies(unittest.TestCase):
+    def test_getters_match_capture(self):
+        self.assertEqual(ace.get_command("anc").hex(), "00020e")        # GetAncMode
+        self.assertEqual(ace.get_command("eq").hex(), "00021c")         # GetCustomEq
+        self.assertEqual(ace.get_command("name").hex(), "000209")
+        self.assertEqual(ace.get_command("volume").hex(), "000303")
+
+    def test_parse_replies_from_capture(self):
+        self.assertIn("bass=4 treble=0 loudness=1", ace.parse_reply(bytes.fromhex("02021c00040001")))
+        self.assertIn("anc", ace.parse_reply(bytes.fromhex("02020e0001")))
+        self.assertIn("'Sonos Ace'", ace.parse_reply(bytes.fromhex("0202090009536f6e6f7320416365")))
+        self.assertIn("COMMAND_NOT_SUPPORTED", ace.parse_reply(bytes.fromhex("02021802")))
+
+    def test_loudness(self):
+        self.assertEqual(ace.loudness_command(True).hex(), "00022001")
+
+
 class AgainstCapture(unittest.TestCase):
     """Re-encode every set command found in a real capture and compare byte for byte."""
 

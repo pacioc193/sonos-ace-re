@@ -11,6 +11,8 @@ FS/
 
 # Sonos binaries and decompiled output: never commit
 *.apk
+*.apkm
+*.dex
 *.apks
 *.xapk
 *.so

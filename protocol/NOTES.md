@@ -1,142 +1,184 @@
 # Protocollo Sonos Ace – note
 
-Regola: ogni affermazione ha un livello di confidenza e un riferimento all'evidenza
-(ID esperimento in [../captures/EXPERIMENTS.md](../captures/EXPERIMENTS.md), timestamp,
-offset). Confidenza: **C** confermato (riprodotto / inviato con successo),
-**P** probabile (visto più volte), **I** ipotesi.
+Regola: ogni affermazione ha un livello di confidenza e un riferimento all'evidenza.
+Confidenza: **C** confermato (riprodotto / inviato con successo), **P** probabile
+(coerente tra catture e identificatori dell'app), **I** ipotesi.
 
-Tutti i timestamp sono in secondi relativi al primo record ATT dell'handle LE nel log.
+Fonti: **EXP-01/EXP-02** = catture HCI ([../captures/EXPERIMENTS.md](../captures/EXPERIMENTS.md));
+**APK** = nomi e valori numerici degli identificatori nell'app Sonos 89.01.11 (solo
+identificatori di protocollo, nessun codice riprodotto qui).
 
-## Trasporto
+## Trasporto: GATT su BLE
 
 | Voce | Valore | Conf. | Evidenza |
 |---|---|---|---|
-| Canale di controllo | **GATT su BLE** (non RFCOMM) | P | EXP-01: tutto il traffico di controllo è ATT su un collegamento LE; sul link BR/EDR della stessa periferica c'è solo HFP (AT) |
-| Scrittura comandi | attribute handle `0x0044`, **Write Command** (0x52, senza risposta ATT) | C | EXP-01 |
-| Risposte / eventi | attribute handle `0x0046`, **Notification** (0x1B) | C | EXP-01 |
-| CCCD abilitati | scritti `0100` su più handle subito dopo la connessione (0x41, 0x47, 0x45, 0x48, 0x51, ...) | P | EXP-01 t≈0.4–2.4 s |
-| MTU | richiesta 512 (0x0200), risposta 512 | C | EXP-01 t=0 |
-| UUID servizio / caratteristiche | **ignoti** – la discovery GATT è in cache anche in EXP-02 (letto solo il Database Hash `d994c3f9165b746506af2baeaa89c461`); l'advertising riporta solo il nome "Sonos Ace", nessun UUID. Un client Windows può leggerli a runtime (`bleak`: elenco servizi), oppure dall'APK | – | EXP-01, EXP-02 |
-| Registrazione client | Write Command su `0x004e`: `01 06 04 00 14 00 00 00 10 51468da4854b7bd88171310705bbebbe`, risposta notify su `0x0050`: `01 07 00 00 02 00 00`. **Identico in EXP-01 ed EXP-02** (16 byte fissi, non un nonce) | P | EXP-01 t≈2.19 s, EXP-02 stessa posizione. Probabile ID dell'app/client: da rinviare così com'è; non è verificato se i comandi su 0x44 lo richiedano |
-| Autenticazione applicativa | nessuna visibile sui comandi 0x44 (nessun challenge/risposta variabile) | P | EXP-01, EXP-02 |
+| Servizio | `0000FE07-0000-1000-8000-00805F9B34FB` | P | APK (costante del servizio Sonos) |
+| `accessory_control`: scrittura / notifica | `C44F42B1-F5CF-479B-B515-9F1BB0099C9A` / `…9C9B` | P | APK; nelle catture handle `0x0044` (Write Command) / `0x0046` (Notification) |
+| `accessory_data` | `…9C9C` / `…9C9D` | P | APK (non visto nelle catture) |
+| `accessory_setup` (priorità alta) | `…9C9E` / `…9C9F` | I | APK; il messaggio fisso su handle `0x004e`/`0x0050` potrebbe essere questo canale |
+| `accessory_true_room_microphone` | `…9CA5` / `…9CA6` | P | APK |
+| Servizio batteria standard | `0000180F` / `00002A19` | P | APK |
+| Qualcomm GAIA (v3, upgrade) | `00001100-D102-11E1-9B23-00025B00A5A5`, `…1101`, `…1102`, `…1103` | P | APK (usato dall'app per l'aggiornamento firmware) |
+| CCCD | `00002902`, scritto `0100` per abilitare le notifiche | C | EXP-01/02 |
+| MTU | richiesta 512 | C | EXP-01/02 |
+| Corrispondenza handle ↔ UUID | **non verificata** (discovery GATT in cache nelle catture) | – | confermare con `ace.py services` |
 
-## Framing (provvisorio)
+Il messaggio fisso su `0x004e` (identico in EXP-01 ed EXP-02):
+`01 06 04 00 14 00 00 00 10 51468da4854b7bd88171310705bbebbe`, risposta notify su `0x0050`:
+`01 07 00 00 02 00 00`. L'app contiene anche un'handshake "BLEv4" con CRC16: il legame
+con questo messaggio non è verificato. Nessuna autenticazione visibile sui comandi di controllo.
 
-Comando (host → cuffie, handle `0x0044`):
+## Framing: ACP (Accessory Control Protocol)
 
-```
-offset  len  campo
-0       1    00          costante nei comandi osservati (direzione/tipo = "richiesta")
-1       1    categoria   (vedi tabella)
-2       1    id comando
-3..     n    parametri (opzionali; 1 byte per i set osservati)
-```
-
-Risposta (cuffie → host, handle `0x0046`):
+Messaggio (host → cuffie su scrittura, cuffie → host su notifica):
 
 ```
-0       1    02          "risposta" (richiesta 00 -> risposta 02)
-1       1    categoria   (eco)
-2       1    id comando  (eco)
-3..     n    dati; spesso 00 = ok, poi eventuale lunghezza + valore
+byte 0   tipo        00 = richiesta, 02 = risposta, 01 = evento non richiesto
+byte 1   gruppo      vedi tabella gruppi
+byte 2   PDU id      per gli eventi >= 128 (0x80)
+byte 3.. risposta: stato (1 byte) + dati; richiesta: parametri
 ```
 
-Eventi non richiesti iniziano con `01` (vedi sotto). Nessun campo lunghezza globale,
-checksum o contatore di sequenza osservato nei comandi 0x44.
+Nessun campo lunghezza, checksum o contatore sui messaggi di controllo osservati.
+Stringhe: lunghezza (1 byte) + ASCII. Valori numerici con segno: complemento a due (`ff` = -1).
 
-## Comandi osservati (categoria / id)
+**Stato risposta** (APK): `0` SUCCESS, `1` NAMESPACE_NOT_SUPPORTED, `2` COMMAND_NOT_SUPPORTED,
+`3` INSUFFICIENT_RESOURCES, `4` INVALID_PARAMETER, `5` INVALID_STATE, `6` INVALID_HEADER,
+`7` INVALID_LENGTH, `8` UNEXPECTED_ERROR, `9` NO_PERMISSIONS.
 
-| Comando (hex) | Risposta (hex) | Significato probabile | Conf. |
+### Gruppi (secondo byte)
+
+| Gruppo | Nome (APK) | Conf. | Evidenza |
 |---|---|---|---|
-| `00 00 03` | `02 00 03 00 0f "3.9.9-01c2510 22…"` + dati | versione firmware (stringa ASCII) | P |
-| `00 00 0a` | `02 00 0a 02` | ? | |
-| `00 00 04` / `05` | `02 00 04 00 00` / `02 00 05 00 00` | ? | |
-| `00 00 08` / `06` / `07` | `02 00 08 02` / `02 00 06 02` / `02 00 07 05` | ? | |
-| `00 02 09` | `02 02 09 00 09 "Sonos Ace"` | **nome del dispositivo** | C |
-| `00 01 06` | `02 01 06 00 01 0c "542A1BDDA708"` | stringa 12 caratteri esadecimali (ID/seriale/MAC?) | I |
-| `00 06 04` | `02 06 04 00 0c "824AF205AF27"` | stringa 12 caratteri: sembra l'indirizzo BT della periferica | I |
-| `00 05 03 00/01/02` | `02 05 03 00 <idx> 00 00 …` (idx 2 → vuoto; idx 0 → "Not Provided") | tabella indicizzata (slot / dispositivi associati?) | I |
-| **`00 02 0f <v>`** | **`02 02 0f 00`** (ack, uguale per ogni v) | **modalità di controllo del rumore** | P (vedi sotto) |
+| `00` | Status (`GetInfo`=3 → versione firmware, `GetChargingState`=4, `GetCurrentActivity`=5, `GetBatteryHealth`=6, `GetMoistureDetectState`=7, `GetPlaybackTimeRemaining`=8, `GetMtu`=9, `GetFeatureCount`=10, `GetFeatureInfo`=11) | P | `00 00 03` → firmware `3.9.9-…` |
+| `01` | Management (opt-in 4/5, `GetHtPrimaries`=6, multipoint 11/12, dispositivi associati 25, pairing 21/26…) | P | EXP-01/02 |
+| `02` | **Settings** (tabella sotto) | C | EXP-01/02 |
+| `03` | Volume (`GetVolume`=3, `SetVolume`=4, `Mute`=5, `Unmute`=6, `GetMuteState`=7, prompt volume 8/9) | P | `00 03 03` → volume; evento `01 03 80 vv` |
+| `04` | Playback (`Play`=3, `Pause`=4, `SkipBack`=5, `SkipToNextTrack`=6, `GetPlaybackStatus`=7) | P | `00 04 07` → `00 01`; evento `01 04 80 vv` |
+| `05` | PlaybackMetadata (`GetMetadataStatus`=3, parametro = indice campo) | I | `00 05 03 <idx>` |
+| `06` | SoundSwap | I | `00 06 09` = `GetSwapState` |
+| `09` | TrueRoom (`GetCalibrationState`=3, start/stop calibrazione/mic) | I | `00 09 03` |
 
-### Controllo rumore: `00 02 0f vv`
+Gruppi 05, 06, 09 dedotti dagli id osservati: da verificare. AudioShare non osservato.
 
-Osservato in EXP-01: 9 comandi consecutivi, intervallo ≈ 1.2–1.7 s, valori
-`02, 00, 01, 02, 00, 01, 02, 00, 01`. Ogni comando riceve l'ack `02 02 0f 00`
-(stato 00 = ok, senza eco del valore).
+## Impostazioni (gruppo `02`)
 
-Ordine delle azioni dichiarato dall'utente: partenza in cancellazione attiva, poi tre
-cicli **trasparenza → off → cancellazione attiva**.
+Ogni impostazione ha un PDU `Get` (risposta: stato + valore) e uno `Set` (parametro = valore;
+risposta: solo stato, `02 02 <id> 00`).
 
-| vv | Modalità | Conf. | Evidenza |
+### Confermate da catture (C/P)
+
+| Funzione | Set | Get | Valori |
 |---|---|---|---|
-| `02` | Trasparenza (Aware) | P | 1º comando di ogni ciclo |
-| `00` | Off | P | 2º comando di ogni ciclo |
-| `01` | Cancellazione attiva (ANC) | P | 3º comando di ogni ciclo; coerente con la lettura iniziale `00 04 07` → `02 04 07 00 01` (stato ANC all'avvio) |
+| **Modalità rumore** | `0f` (15) | `0e` (14) | `00` off, `01` ANC, `02` trasparenza. EXP-01/02; `GetAncMode` all'avvio = `01` con le cuffie in ANC |
+| **Bass** | `1e` (30) | in `GetCustomEq` | int8, -10…+10 |
+| **Treble** | `1f` (31) | in `GetCustomEq` | int8, -10…+10 |
+| **Loudness** | `20` (32) | in `GetCustomEq` | 0/1 (non provato; all'avvio = 1) |
+| **Bilanciamento** | `22` (34) | `21` (33) | int8 -10…+10, + = destra |
+| **EQ personalizzato** | – | `1c` (28) | risposta `00 <bass> <treble> <loudness>`; all'avvio EXP-02: bass 4, treble 0, loudness 1 |
+| Nome | `0a` (10) | `09` (9) | stringa (`Sonos Ace`) |
 
-- Confermata in EXP-02 (secondo log, stessa sequenza `02, 00, 01` con partenza in ANC: trasparenza → off → ANC). Resta fondata sull'ordine dichiarato dall'utente, non su una verifica audio.
-- Nessun livello continuo visto (solo 3 valori distinti).
-- Ipotesi: `00 04 07` = lettura dello stato corrente della modalità (stessa codifica: 01 = ANC).
+### Presenti sulle cuffie (letture all'avvio EXP-02) ma non ancora comandate
 
-### Impostazioni scrivibili (categoria `02`, EXP-02)
-
-Formato: `00 02 <id> <vv>`, risposta `02 02 <id> 00` (ack, nessun eco del valore).
-`vv` è un **intero con segno a 8 bit** (complemento a due: `ff` = -1, `f6` = -10).
-
-| id | Funzione | Range osservato | Conf. | Evidenza |
-|---|---|---|---|---|
-| `0f` | Modalità rumore (`02` trasparenza, `00` off, `01` ANC) | 3 valori | P | EXP-01, EXP-02 |
-| `1e` | **Bass** | -10 … +10 | P | EXP-02: 05→0a→(scende)→00→f6→(sale)→04, come il flusso 4 → +10 → -10 → 4 |
-| `1f` | **Treble** | -10 … +10 | P | EXP-02: 01→0a→00→f6→00, come 0 → +10 → -10 → 0 |
-| `22` | **Bilanciamento** (`+` = destra, `-` = sinistra) | -10 … +10 | P | EXP-02: 02,05,07,08,0a → 00 → fd…f6 → 00, come 0 → tutto dx → tutto sx → 0 |
-
-L'app invia un comando per ogni passo dello slider (≈ 80–150 ms): per un client basta un
-singolo comando con il valore finale. Non è stata osservata alcuna lettura del valore
-corrente di `1e`/`1f`/`22` (non figurano nella lettura iniziale).
-
-### Lettura iniziale dei parametri (categoria `02`, EXP-01)
-
-All'avvio l'app interroga con `00 02 xx` tutti i parametri della categoria `02`. Valori
-letti nella sessione EXP-01 (dopo il byte di stato `00`; le lunghezze/tipi dei valori non
-sono ancora decodificati). Servono da **elenco delle funzioni** per EXP-02: gli id non
-elencati qui (es. `0f`, la modalità rumore) sono scritti solo dall'interfaccia.
-
-| id | risposta (dopo `02 02 xx`) | note |
+| Funzione | Get → risposta all'avvio | Note |
 |---|---|---|
-| `04` | `00 03` | ? (uguale in EXP-01 ed EXP-02, quindi **non** è bass/treble/balance) |
-| `09` | `00 09 "Sonos Ace"` | nome dispositivo |
-| `0c` | `00 07` | ? |
-| `0e` | `00 01` | ? |
-| `10` | `00 01` | ? |
-| `12` | `00 00` | ? |
-| `18` | `02` | ? (risposta senza byte di stato) |
-| `1a` | `00 02` | ? |
-| `1c` | `00 06 00 01` (EXP-01) → `00 04 00 01` (EXP-02) | ? (cambiato tra le due sessioni) |
-| `21` | `00 00` | ? |
-| `27` | `00 00` | ? |
-| `29` | `05` | ? |
-| `2f`, `31`, `33`, `39`, `3b`, `3d` | `02` | ? (stesso formato di `18`) |
-| `35`, `37` | `00 01` | ? |
+| `GetAdaptiveAncMode` (55) | OK, `01` | modalità ANC adattiva (set = 56) |
+| `GetSelfVoiceAnc` (53) | OK, `01` | gestione della propria voce in ANC (set = 54) |
+| `GetAncButtonCustomization` (4) | OK, `03` | quali modalità cicla il pulsante (set = 6) |
+| `GetWearDetectionActions` (12) | OK, `07` | azioni al rilevamento indossamento (set = 13) |
+| `GetSpatialAudioMode` (16) | OK, `01` | set = 17 |
+| `GetHeadTrackingMode` (18) | OK, `00` | set = 19 |
+| `GetDolbyHeadTrackingMode` (39) | OK, `00` | set = 40 |
+| `GetAutoOffTimer` (26) | OK, `02` | set = 27 |
+| `GetSnoozeTimer` (41) | INVALID_STATE | set = 42 |
 
-Altre categorie lette all'avvio: `03/03` → `00 41` (EXP-01) / `00 26` (EXP-02): probabile **volume** assoluto 0–127, coerente con le notify `01 03 80 vv` (ipotesi), `03/07` → `00 00`, `01/0c` → `00 01`,
-`01/04` → `00 00`, `05/03 <idx>` (tabella a 3 voci), `06/09` → `00 00 00`, `09/03` → `00 00 00`.
+### Non supportate da queste cuffie (COMMAND_NOT_SUPPORTED)
 
-**Limite**: dopo la riassociazione serve un log in modalità snoop *Abilitato* (non
-*Filtrato*): in "Filtrato" i payload ATT vengono troncati e i valori dei set (EQ, modalità)
-spariscono.
+`GetLowPowerMode` (24), `GetAllowFastCharging` (51), `GetAncSpeakToChatMode` (49), `GetVoiceBoostMode` (47),
+vocal guidance: enable (57), battery readout (59), language (61).
 
-### Eventi non richiesti (notify, prefisso `01`)
+### Elenco completo dei PDU del gruppo Settings (APK)
 
-| Notify | Note |
-|---|---|
-| `01 04 80 02`, `01 03 80 41`, `01 00 81 02` | burst a t≈88.57 s (cambio di stato non legato a comandi) |
-| `01 03 80 3d`, `…39`, `…36`, `…32`, `…2e`, `…2a`, `…26` | sequenza che decresce di ~4 per passo a t≈91–92 s: probabile **volume** o livello (I) |
+| id | hex | nome |
+|---|---|---|
+| 4 | `0x04` | GetAncButtonCustomization |
+| 6 | `0x06` | SetAncButtonCustomization |
+| 9 | `0x09` | GetName |
+| 10 | `0x0a` | SetName |
+| 11 | `0x0b` | ResetName |
+| 12 | `0x0c` | GetWearDetectionActions |
+| 13 | `0x0d` | SetWearDetectionActions |
+| 14 | `0x0e` | GetAncMode |
+| 15 | `0x0f` | SetAncMode |
+| 16 | `0x10` | GetSpatialAudioMode |
+| 17 | `0x11` | SetSpatialAudioMode |
+| 18 | `0x12` | GetHeadTrackingMode |
+| 19 | `0x13` | SetHeadTrackingMode |
+| 24 | `0x18` | GetLowPowerMode |
+| 25 | `0x19` | SetLowPowerMode |
+| 26 | `0x1a` | GetAutoOffTimer |
+| 27 | `0x1b` | SetAutoOffTimer |
+| 28 | `0x1c` | GetCustomEq |
+| 29 | `0x1d` | ResetCustomEq |
+| 30 | `0x1e` | SetBass |
+| 31 | `0x1f` | SetTreble |
+| 32 | `0x20` | SetLoudness |
+| 33 | `0x21` | GetBalance |
+| 34 | `0x22` | SetBalance |
+| 35 | `0x23` | GetDaxSupport |
+| 36 | `0x24` | SetDaxSupport |
+| 39 | `0x27` | GetDolbyHeadTrackingMode |
+| 40 | `0x28` | SetDolbyHeadTrackingMode |
+| 41 | `0x29` | GetSnoozeTimer |
+| 42 | `0x2a` | SetSnoozeTimer |
+| 43 | `0x2b` | GetLedColorblindMode |
+| 44 | `0x2c` | SetLedColorblindMode |
+| 45 | `0x2d` | GetContentKeyPressSpeed |
+| 46 | `0x2e` | SetContentKeyPressSpeed |
+| 47 | `0x2f` | GetVoiceBoostMode |
+| 48 | `0x30` | SetVoiceBoostMode |
+| 49 | `0x31` | GetAncSpeakToChatMode |
+| 50 | `0x32` | SetAncSpeakToChatMode |
+| 51 | `0x33` | GetAllowFastCharging |
+| 52 | `0x34` | SetAllowFastCharging |
+| 53 | `0x35` | GetSelfVoiceAnc |
+| 54 | `0x36` | SetSelfVoiceAnc |
+| 55 | `0x37` | GetAdaptiveAncMode |
+| 56 | `0x38` | SetAdaptiveAncMode |
+| 57 | `0x39` | GetVocalGuidanceEnable |
+| 58 | `0x3a` | SetVocalGuidanceEnable |
+| 59 | `0x3b` | GetVocalGuidanceBatteryReadout |
+| 60 | `0x3c` | SetVocalGuidanceBatteryReadout |
+| 61 | `0x3d` | GetVocalGuidanceLanguage |
+| 62 | `0x3e` | SetVocalGuidanceLanguage |
+| 63 | `0x3f` | GetEqSettings |
+| 64 | `0x40` | SetActiveEqType |
+| 65 | `0x41` | SetEqSliderPosns |
+| 66 | `0x42` | ResetEqSettings |
+| 67 | `0x43` | GetLoudness |
+| 68 | `0x44` | SetAdaptiveEQMode |
+| 69 | `0x45` | GetAdaptiveEQMode |
+| 128 | `0x80` | AncModeStatusEvent |
+| 129 | `0x81` | SpatialAudioSettingChangeEvent |
+| 130 | `0x82` | LowPowerModeEvent |
+| 131 | `0x83` | DolbyHeadTrackingChangeEvent |
+
+PDU id ≥ 128 sono eventi inviati dalle cuffie: `AncModeStatusEvent` (128), `LowPowerModeEvent`
+(130), `SpatialAudioSettingChangeEvent` (129), `DolbyHeadTrackingChangeEvent` (131).
+Non supportati o non ancora provati: LED colorblind mode (43/44), content key press speed
+(45/46), DAX support (35/36), adaptive EQ (68/69), EQ slider positions (65), active EQ type
+(64), reset EQ (66) e reset nome (11).
+
+## Correzioni rispetto a note precedenti
+
+- `00 04 07` **non** legge lo stato ANC: è `GetPlaybackStatus` (gruppo Playback). Lo stato ANC
+  si legge con `00 02 0e`.
+- `02/04` è `GetAncButtonCustomization`, non bass.
+- `03/03` = volume (non ipotesi): `GetVolume`.
 
 ## Domande aperte
 
-- Valore/comando per "amplificatore suoni" (non ancora catturato).
-- "Amplificatore suoni" è un valore di `0f` o un comando diverso?
-- Come si legge il valore corrente di bass/treble/balance (nessun getter visto)?
-- Funzioni nascoste/non esposte: confrontare con la tabella dei comandi nell'APK.
-- Lo stato cambiato dal tasto fisico viene notificato (`01 …`)? Con quale formato?
-- UUID di servizio e caratteristiche (per implementare un client senza handle fissi).
-- Significato delle categorie `00 00`, `00 01`, `00 05`, `00 06`, `00 09`.
+- Handle ↔ UUID (confermare con `ace.py services`) e ruolo del messaggio su `0x4e`.
+- Valori di `SetAdaptiveAncMode`, `SetSelfVoiceAnc`, `SetLoudness`, modalità audio spaziale e timer di spegnimento.
+- Livelli intermedi per trasparenza/ANC: nessuno trovato nei comandi `0f`; verificare `AdaptiveAncMode`.
+- Il codice dei pulsanti fisici e le notifiche di cambio modalità da tasto (`AncModeStatusEvent` = `01 02 80 vv`, da verificare).

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Sonos Ace control client (BLE / GATT) -- proof of concept.
 
-Protocol notes: ../protocol/NOTES.md. Everything here is reverse engineered from
-HCI captures; the GATT UUIDs are not known yet, so the first run uses ``scan`` and
-``services`` to find them, then the characteristics are selected by UUID with
-``--write-uuid`` / ``--notify-uuid`` (or auto-detected, see ``autodetect``).
+Protocol notes: ../protocol/NOTES.md. Reverse engineered from HCI captures and from the
+identifiers of the Sonos app. The control characteristics default to the UUIDs listed
+there; if the headphones expose something different, run ``services`` and pass
+``--write-uuid`` / ``--notify-uuid``.
 
 Usage (needs ``pip install bleak``; Windows 10/11, Linux or macOS):
 
@@ -14,6 +14,7 @@ Usage (needs ``pip install bleak``; Windows 10/11, Linux or macOS):
   ace.py <addr> bass  -10..10
   ace.py <addr> treble -10..10
   ace.py <addr> balance -10..10             # + = right, - = left
+  ace.py <addr> get anc|eq|balance|name|volume|...   # read a setting (see GETTERS)
   ace.py <addr> raw 00020f01                # send an arbitrary command, print the reply
 
 The headphones must accept an LE connection from this host: if the phone app is
@@ -33,6 +34,22 @@ ID_TREBLE = 0x1F
 ID_BALANCE = 0x22
 
 MODES = {"off": 0x00, "anc": 0x01, "aware": 0x02, "transparency": 0x02}
+
+# GATT UUIDs from the app's identifiers (NOTES.md): service 0xFE07, control channel.
+SERVICE_UUID = "0000fe07-0000-1000-8000-00805f9b34fb"
+CONTROL_WRITE_UUID = "c44f42b1-f5cf-479b-b515-9f1bb0099c9a"
+CONTROL_NOTIFY_UUID = "c44f42b1-f5cf-479b-b515-9f1bb0099c9b"
+SETUP_WRITE_UUID = "c44f42b1-f5cf-479b-b515-9f1bb0099c9e"  # unverified role
+
+ID_LOUDNESS = 0x20
+
+# Read-only requests: name -> (group, PDU id). Group 02 = settings, 03 = volume, 00 = status.
+GETTERS = {
+    "anc": (0x02, 0x0E), "eq": (0x02, 0x1C), "balance": (0x02, 0x21), "name": (0x02, 0x09),
+    "adaptive-anc": (0x02, 0x37), "selfvoice": (0x02, 0x35), "autooff": (0x02, 0x1A),
+    "wear": (0x02, 0x0C), "spatial": (0x02, 0x10), "buttons": (0x02, 0x04),
+    "volume": (0x03, 0x03), "info": (0x00, 0x03), "charging": (0x00, 0x04),
+}
 
 # Fixed 17-byte message seen in both captures on the secondary characteristic (handle
 # 0x004e) right before the first command. Unknown purpose; replayed as-is on request.
@@ -67,6 +84,39 @@ def treble_command(level: int) -> bytes:
 
 def balance_command(level: int) -> bytes:
     return command(ID_BALANCE, int8(level))
+
+
+def loudness_command(on: bool) -> bytes:
+    return command(ID_LOUDNESS, 1 if on else 0)
+
+
+def get_command(name: str) -> bytes:
+    try:
+        group, pdu = GETTERS[name.lower()]
+    except KeyError:
+        raise ValueError(f"unknown getter {name!r} (use: {', '.join(sorted(GETTERS))})")
+    return bytes([0x00, group, pdu])
+
+
+def parse_reply(reply: bytes) -> str:
+    """Human-readable decode of ``02 <group> <pdu> <status> <data...>``."""
+    status_names = {0: "OK", 1: "NAMESPACE_NOT_SUPPORTED", 2: "COMMAND_NOT_SUPPORTED",
+                    3: "INSUFFICIENT_RESOURCES", 4: "INVALID_PARAMETER", 5: "INVALID_STATE",
+                    6: "INVALID_HEADER", 7: "INVALID_LENGTH", 8: "UNEXPECTED_ERROR", 9: "NO_PERMISSIONS"}
+    if len(reply) < 4 or reply[0] != 0x02:
+        return reply.hex()
+    status, data = reply[3], reply[4:]
+    text = f"{status_names.get(status, status)}"
+    if status == 0 and data:
+        text += f" data={data.hex()}"
+        if reply[1:3] == bytes([0x02, 0x1C]) and len(data) >= 3:
+            b, t = int.from_bytes(data[0:1], "big", signed=True), int.from_bytes(data[1:2], "big", signed=True)
+            text += f" (bass={b} treble={t} loudness={data[2]})"
+        elif reply[1:3] == bytes([0x02, 0x0E]):
+            text += f" ({ {0: 'off', 1: 'anc', 2: 'aware'}.get(data[0], '?') })"
+        elif reply[1:3] == bytes([0x02, 0x09]) and len(data) > 1:
+            text += f" ({data[1:1 + data[0]].decode(errors='replace')!r})"
+    return text
 
 
 def is_ack(command_bytes: bytes, reply: bytes) -> bool:
@@ -118,6 +168,9 @@ async def run(args) -> None:
         write_char = notify_char = None
         if args.write_uuid and args.notify_uuid:
             write_char, notify_char = args.write_uuid, args.notify_uuid
+        elif client.services.get_characteristic(CONTROL_WRITE_UUID) and \
+                client.services.get_characteristic(CONTROL_NOTIFY_UUID):
+            write_char, notify_char = CONTROL_WRITE_UUID, CONTROL_NOTIFY_UUID
         else:
             for svc, writes, notifies in autodetect(client.services):
                 print(f"auto-detected service {svc.uuid}: "
@@ -141,7 +194,7 @@ async def run(args) -> None:
         print(f"-> {cmd.hex()}")
         try:
             reply = await asyncio.wait_for(replies.get(), timeout=3)
-            print(f"<- {reply.hex()}  {'(ack)' if is_ack(cmd, reply) else ''}")
+            print(f"<- {reply.hex()}  {'(ack)' if is_ack(cmd, reply) and len(reply) == 4 else parse_reply(reply)}")
         except asyncio.TimeoutError:
             print("no reply within 3 s")
 
@@ -155,6 +208,10 @@ def build(args) -> bytes:
         return treble_command(int(args.value))
     if args.cmd == "balance":
         return balance_command(int(args.value))
+    if args.cmd == "loudness":
+        return loudness_command(args.value.lower() in ("1", "on", "true"))
+    if args.cmd == "get":
+        return get_command(args.value)
     if args.cmd == "raw":
         return bytes.fromhex(args.value)
     raise ValueError(args.cmd)
@@ -170,7 +227,7 @@ def main(argv=None) -> None:
         return
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("address", help="BLE address (Windows/Linux) or UUID (macOS)")
-    ap.add_argument("cmd", choices=["mode", "bass", "treble", "balance", "raw"])
+    ap.add_argument("cmd", choices=["mode", "bass", "treble", "balance", "loudness", "get", "raw"])
     ap.add_argument("value")
     ap.add_argument("--write-uuid")
     ap.add_argument("--notify-uuid")
