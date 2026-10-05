@@ -18,7 +18,7 @@ non è autorizzato. Questo documento distingue nettamente:
 3. Prima dei comandi, il telefono fa **un solo scambio** sulla caratteristica di setup
    (`…9C9E` → `…9C9F`): write `01 06 04 00 14 00 00 00 10 <16 byte>` e risposta
    `01 07 00 00 02 00 00`. Nessun altro messaggio, nessun nonce sul filo. I 16 byte sono
-   **identici in tre connessioni separate** (EXP-01, EXP-02, EXP-03b) ⇒ valore statico,
+   **identici in quattro connessioni separate** (EXP-01, EXP-02, EXP-03b, EXP-04) ⇒ valore statico,
    non derivato per sessione né rigenerato a ogni apertura dell'app. Lo scambio avviene
    **una volta per connessione** (tipicamente all'apertura/foreground dell'app) ed è il
    *gate* che precede i comandi: solo dopo la risposta `… 00 00` i comandi ACP tornano
@@ -42,13 +42,15 @@ altro host non basta.
 ### Sull'ipotesi "handshake all'apertura dell'app" (EXP-03b)
 
 C'è effettivamente un handshake per-connessione (punto 3), quindi l'intuizione è corretta nella
-forma. **Ma non è dinamico**: su tre connessioni separate il token di 16 byte è bit-per-bit
+forma. **Ma non è dinamico**: su quattro connessioni separate il token di 16 byte è bit-per-bit
 identico, quindi non viene negoziato/rigenerato all'apertura. L'apertura dell'app riusa lo stesso
 segreto statico, già associato durante il pairing. Le due letture compatibili con i dati —
 "handshake dinamico che però ridà sempre lo stesso valore a parità di bond" vs "token statico
 presentato dal bond" — restano indistinguibili sul filo; in entrambe la barriera pratica è la
 stessa (serve essere **quel** telefono). Un eventuale segreto *fresco* potrebbe esistere solo
 **fuori banda** (minting lato cloud quando l'app fa login), non visibile in una cattura BLE.
+EXP-04: aprire l'app più volte sulla **stessa** connessione LE non ripete l'handshake; serve una
+vera disconnessione fra le aperture per osservare handshake separati.
 
 ## Dedotto dal codice (confidenza media, da non sopravvalutare)
 

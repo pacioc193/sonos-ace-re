@@ -79,6 +79,22 @@ stato fatto, quando e cosa si è osservato. Nome file consigliato:
 - Prossimo per handle↔UUID: cattura durante un **re-pairing** (svuota la cache GATT) oppure discovery
   live dal nostro client (`ace.py services`).
 
+### EXP-04 – Toggle Bluetooth + app aperta più volte (2026-10-05)
+- Ipotesi: più aperture dell'app → più handshake; i 16 byte cambiano?
+- File: `btsnoop_hci.log` (303 701 byte, fuori dal repo – su Drive dell'utente), Pixel 10 Pro.
+- Osservazioni:
+  - **Un solo** handshake su `0x4e` (`tx`), **un solo** CCCD setup abilitato, **una sola raffica**
+    di 39 comandi su `0x44`: le riaperture dell'app hanno **riusato la stessa connessione LE**,
+    quindi l'handshake non si è ripetuto.
+  - Token dei 16 byte **ancora identico** (4ª cattura: EXP-01/02/03b/04) ⇒ statico.
+  - La **cache GATT è ancora valida**: solo riletture di `0x2B2A` (DB hash), `0x2B3A` (features) e
+    `0x2A04`; nessuna rienumerazione. **Il toggle del Bluetooth NON svuota la cache GATT.**
+  - Nel log compare anche un secondo indirizzo (`80:4A:F2:05:AF:27`), da ignorare.
+- Conclusioni: conferma "handshake = gate, una volta per connessione, token statico". Per vedere
+  **più handshake** serve una vera disconnessione tra le aperture (spegnere/riaccendere le cuffie,
+  o *Forza arresto* dell'app Sonos → riapri). Per `handle↔UUID` serve un **re-pairing**
+  (Dimentica + riassocia svuota la cache) **oppure** la discovery dal PC (`ace.exe auto services`).
+
 ### (superato) Prossimo esperimento dopo EXP-01
 Una sola azione per volta, in questo ordine, con 10 s di pausa e annotando l'ordine:
 1. ANC **on** → 2. Trasparenza (Aware) → 3. ANC off → 4. "Amplificatore suoni" on.

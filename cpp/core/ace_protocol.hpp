@@ -25,7 +25,8 @@ inline constexpr const char* kSetupWriteUuid = "c44f42b1-f5cf-479b-b515-9f1bb009
 inline constexpr const char* kSetupNotifyUuid = "c44f42b1-f5cf-479b-b515-9f1bb0099c9f";  // role unverified
 
 // "Registration" message the phone sends on the setup characteristic right before the first
-// command (25 bytes: 9-byte prefix + 16-byte access token), identical in both captures. The
+// command (25 bytes: 9-byte prefix + 16-byte access token), identical across four captures
+// (EXP-01/02/03b/04 -> static, bond-bound; see protocol/AUTH.md). The
 // reply seen on the setup notify characteristic was `01 07 00 00 02 00 00` (accepted).
 // The real token is a per-device credential bound to the phone's bond (see protocol/AUTH.md):
 // it is intentionally NOT committed. Supply your own with --token=<32 hex digits>.

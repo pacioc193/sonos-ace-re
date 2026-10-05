@@ -31,7 +31,8 @@ Il log è **completo di default**: ogni passo, codice di stato Windows/GATT, han
 inviati/ricevuti, con orario, sia a console sia nel file `ace_debug_<data>.log` accanto
 all'exe. Opzioni: `--quiet` (meno righe), `--log=<file>`, `--timeout=<ms>`, `--cached`
 (usa la cache GATT di Windows invece di riscoprire), `--no-session`, `--write-uuid=`,
-`--notify-uuid=`, `--no-register` (salta la registrazione), `--token=captured|random|<32 hex>`.
+`--notify-uuid=`, `--no-register` (salta la registrazione), `--token=<32 hex>|random`
+(default: placeholder redatto, non valido).
 
 Se qualcosa non funziona, mandami il file `ace_debug_*.log`: contiene tutto il necessario.
 Cosa mi aspetto di poter leggere lì:
@@ -82,7 +83,8 @@ fisso da 25 byte sulla caratteristica *setup* (`…9C9E`) e riceve la risposta s
 Cerca nel log `registration reply:` e poi lo stato dei comandi. Varianti da provare, in ordine:
 
 ```bat
-ace.exe auto probe                    :: token catturato dal telefono (default)
+ace.exe auto probe                    :: placeholder redatto (default): dara' NO_PERMISSIONS
+ace.exe auto probe --token=<32 hex>   :: il token reale visto nelle tue catture
 ace.exe auto probe --token=random     :: un token nuovo: se funziona, non serve quello del telefono
 ace.exe auto probe --no-register      :: per confronto
 ```
