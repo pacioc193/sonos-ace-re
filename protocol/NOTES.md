@@ -16,9 +16,9 @@ Tutti i timestamp sono in secondi relativi al primo record ATT dell'handle LE ne
 | Risposte / eventi | attribute handle `0x0046`, **Notification** (0x1B) | C | EXP-01 |
 | CCCD abilitati | scritti `0100` su più handle subito dopo la connessione (0x41, 0x47, 0x45, 0x48, 0x51, ...) | P | EXP-01 t≈0.4–2.4 s |
 | MTU | richiesta 512 (0x0200), risposta 512 | C | EXP-01 t=0 |
-| UUID servizio / caratteristiche | **ignoti** – la discovery GATT era già in cache (l'host ha solo letto il Database Hash) | – | serve nuova cattura con cuffie dimenticate e riassociate |
-| Servizio secondario | scrittura 17 byte `01 06 04 00 14 00 00 00 10 <16 byte casuali>` su `0x004e`, risposta notify `01 07 00 00 02 00 00` su `0x0050` | I | EXP-01 t≈2.19 s: sembra un handshake / scambio di nonce, ma i comandi su 0x44 funzionano subito dopo |
-| Autenticazione applicativa | nessuna visibile sui comandi 0x44 | I | |
+| UUID servizio / caratteristiche | **ignoti** – la discovery GATT è in cache anche in EXP-02 (letto solo il Database Hash `d994c3f9165b746506af2baeaa89c461`); l'advertising riporta solo il nome "Sonos Ace", nessun UUID. Un client Windows può leggerli a runtime (`bleak`: elenco servizi), oppure dall'APK | – | EXP-01, EXP-02 |
+| Registrazione client | Write Command su `0x004e`: `01 06 04 00 14 00 00 00 10 51468da4854b7bd88171310705bbebbe`, risposta notify su `0x0050`: `01 07 00 00 02 00 00`. **Identico in EXP-01 ed EXP-02** (16 byte fissi, non un nonce) | P | EXP-01 t≈2.19 s, EXP-02 stessa posizione. Probabile ID dell'app/client: da rinviare così com'è; non è verificato se i comandi su 0x44 lo richiedano |
+| Autenticazione applicativa | nessuna visibile sui comandi 0x44 (nessun challenge/risposta variabile) | P | EXP-01, EXP-02 |
 
 ## Framing (provvisorio)
 
@@ -73,9 +73,25 @@ cicli **trasparenza → off → cancellazione attiva**.
 | `00` | Off | P | 2º comando di ogni ciclo |
 | `01` | Cancellazione attiva (ANC) | P | 3º comando di ogni ciclo; coerente con la lettura iniziale `00 04 07` → `02 04 07 00 01` (stato ANC all'avvio) |
 
-- Mappatura dedotta dall'ordine, non da tre esperimenti separati: conferma definitiva con EXP-02.
+- Confermata in EXP-02 (secondo log, stessa sequenza `02, 00, 01` con partenza in ANC: trasparenza → off → ANC). Resta fondata sull'ordine dichiarato dall'utente, non su una verifica audio.
 - Nessun livello continuo visto (solo 3 valori distinti).
 - Ipotesi: `00 04 07` = lettura dello stato corrente della modalità (stessa codifica: 01 = ANC).
+
+### Impostazioni scrivibili (categoria `02`, EXP-02)
+
+Formato: `00 02 <id> <vv>`, risposta `02 02 <id> 00` (ack, nessun eco del valore).
+`vv` è un **intero con segno a 8 bit** (complemento a due: `ff` = -1, `f6` = -10).
+
+| id | Funzione | Range osservato | Conf. | Evidenza |
+|---|---|---|---|---|
+| `0f` | Modalità rumore (`02` trasparenza, `00` off, `01` ANC) | 3 valori | P | EXP-01, EXP-02 |
+| `1e` | **Bass** | -10 … +10 | P | EXP-02: 05→0a→(scende)→00→f6→(sale)→04, come il flusso 4 → +10 → -10 → 4 |
+| `1f` | **Treble** | -10 … +10 | P | EXP-02: 01→0a→00→f6→00, come 0 → +10 → -10 → 0 |
+| `22` | **Bilanciamento** (`+` = destra, `-` = sinistra) | -10 … +10 | P | EXP-02: 02,05,07,08,0a → 00 → fd…f6 → 00, come 0 → tutto dx → tutto sx → 0 |
+
+L'app invia un comando per ogni passo dello slider (≈ 80–150 ms): per un client basta un
+singolo comando con il valore finale. Non è stata osservata alcuna lettura del valore
+corrente di `1e`/`1f`/`22` (non figurano nella lettura iniziale).
 
 ### Lettura iniziale dei parametri (categoria `02`, EXP-01)
 
@@ -86,7 +102,7 @@ elencati qui (es. `0f`, la modalità rumore) sono scritti solo dall'interfaccia.
 
 | id | risposta (dopo `02 02 xx`) | note |
 |---|---|---|
-| `04` | `00 03` | ? (candidato EQ/bassi: l'utente aveva bass +3/+4, ipotesi) |
+| `04` | `00 03` | ? (uguale in EXP-01 ed EXP-02, quindi **non** è bass/treble/balance) |
 | `09` | `00 09 "Sonos Ace"` | nome dispositivo |
 | `0c` | `00 07` | ? |
 | `0e` | `00 01` | ? |
@@ -94,14 +110,14 @@ elencati qui (es. `0f`, la modalità rumore) sono scritti solo dall'interfaccia.
 | `12` | `00 00` | ? |
 | `18` | `02` | ? (risposta senza byte di stato) |
 | `1a` | `00 02` | ? |
-| `1c` | `00 06 00 01` | ? |
+| `1c` | `00 06 00 01` (EXP-01) → `00 04 00 01` (EXP-02) | ? (cambiato tra le due sessioni) |
 | `21` | `00 00` | ? |
 | `27` | `00 00` | ? |
 | `29` | `05` | ? |
 | `2f`, `31`, `33`, `39`, `3b`, `3d` | `02` | ? (stesso formato di `18`) |
 | `35`, `37` | `00 01` | ? |
 
-Altre categorie lette all'avvio: `03/03` → `00 41`, `03/07` → `00 00`, `01/0c` → `00 01`,
+Altre categorie lette all'avvio: `03/03` → `00 41` (EXP-01) / `00 26` (EXP-02): probabile **volume** assoluto 0–127, coerente con le notify `01 03 80 vv` (ipotesi), `03/07` → `00 00`, `01/0c` → `00 01`,
 `01/04` → `00 00`, `05/03 <idx>` (tabella a 3 voci), `06/09` → `00 00 00`, `09/03` → `00 00 00`.
 
 **Limite**: dopo la riassociazione serve un log in modalità snoop *Abilitato* (non
@@ -117,9 +133,10 @@ spariscono.
 
 ## Domande aperte
 
-- Conferma della mappatura 02/00/01 con esperimenti separati, e valore per "amplificatore suoni".
+- Valore/comando per "amplificatore suoni" (non ancora catturato).
 - "Amplificatore suoni" è un valore di `0f` o un comando diverso?
-- Esistono parametri di livello per Aware (campo aggiuntivo) o è solo on/off?
+- Come si legge il valore corrente di bass/treble/balance (nessun getter visto)?
+- Funzioni nascoste/non esposte: confrontare con la tabella dei comandi nell'APK.
 - Lo stato cambiato dal tasto fisico viene notificato (`01 …`)? Con quale formato?
 - UUID di servizio e caratteristiche (per implementare un client senza handle fissi).
 - Significato delle categorie `00 00`, `00 01`, `00 05`, `00 06`, `00 09`.

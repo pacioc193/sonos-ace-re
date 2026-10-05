@@ -45,7 +45,17 @@ stato fatto, quando e cosa si è osservato. Nome file consigliato:
   modalità `00 02 0f vv`. Mappatura dedotta: 02 = trasparenza, 00 = off, 01 = ANC.
 - Prossimo: EXP-02 con ordine annotato (vedi sotto).
 
-### Prossimo esperimento (EXP-02, per la mappatura)
+### EXP-02 – Associazione + modalità, EQ e bilanciamento (2026-10-05)
+- File: `btsnoop_hci.log` (424 158 byte, fuori dal repo – su Drive dell'utente), snoop in modalità *Attivato*.
+- Flusso: associazione; modalità isolamento → trasparenza → off; bass 4 → 10 → -10 → 4;
+  treble 0 → 10 → -10 → 0; bilanciamento 0 → tutto dx → tutto sx → 0.
+- Osservazioni: 136 comandi su `0x44` con ack su `0x46`. Modalità: `0f` = 02, 00, 01. Bass `1e`,
+  treble `1f`, balance `22`: int8 -10…+10, un comando per passo di slider. Handshake `0x4e`
+  identico a EXP-01. Discovery GATT ancora in cache: UUID non ottenuti.
+- Conclusioni → [protocol/NOTES.md](../protocol/NOTES.md).
+- Cause del log filtrato in precedenza: snoop non riavviato dopo il cambio di modalità.
+
+### (superato) Prossimo esperimento dopo EXP-01
 Una sola azione per volta, in questo ordine, con 10 s di pausa e annotando l'ordine:
 1. ANC **on** → 2. Trasparenza (Aware) → 3. ANC off → 4. "Amplificatore suoni" on.
 Ripetere 2 volte. Se possibile, prima del test: dimenticare le cuffie e riassociarle
