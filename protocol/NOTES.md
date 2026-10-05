@@ -182,3 +182,13 @@ Non supportati o non ancora provati: LED colorblind mode (43/44), content key pr
 - Valori di `SetAdaptiveAncMode`, `SetSelfVoiceAnc`, `SetLoudness`, modalità audio spaziale e timer di spegnimento.
 - Livelli intermedi per trasparenza/ANC: nessuno trovato nei comandi `0f`; verificare `AdaptiveAncMode`.
 - Il codice dei pulsanti fisici e le notifiche di cambio modalità da tasto (`AncModeStatusEvent` = `01 02 80 vv`, da verificare).
+
+## EXP-03 – Primo test da Windows 11 (C++/WinRT, 2026-10-05)
+
+- **Confermato su un dispositivo reale (C):** servizio `0000FE07-…`, caratteristiche di controllo
+  `…9C9A` (write-without-response) e `…9C9B` (notify); scrittura riuscita, risposte ricevute con
+  latenza ≈ 90 ms. Le cuffie compaiono a Windows come LE con lo stesso indirizzo del collegamento classico.
+- **Senza registrazione ogni richiesta riceve `status=NO_PERMISSIONS` (9)** (probe di 13 richieste:
+  `02 <gruppo> <pdu> 09`). Il decoder dei messaggi è quindi giusto: è un rifiuto a livello di protocollo.
+- Ipotesi (I): serve il passaggio di registrazione sul canale *setup* (`…9C9E`/`…9C9F`, handle `0x4e`/`0x50`
+  nelle catture), con un token da 16 byte. Da verificare con `ace.exe auto probe` (registra per default).

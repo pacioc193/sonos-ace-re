@@ -210,7 +210,8 @@ struct Options {
     int timeout_ms = 3000;
     bool cached = false;
     bool no_session = false;
-    bool register_msg = false;
+    bool no_register = false;
+    std::string token = "captured";  // captured | random | 32 hex digits
     bool quiet = false;
 };
 
@@ -235,7 +236,8 @@ options: --quiet            less logging (default: everything)
          --cached           use cached GATT data instead of re-discovering
          --no-session       do not call GattSession.MaintainConnection
          --write-uuid=<u> --notify-uuid=<u>   override control characteristics
-         --register         first send the fixed 'registration' message to the setup characteristic
+         --no-register      skip the registration step (default: register first, like the phone app)
+         --token=<x>        registration token: captured (default) | random | 32 hex digits
 )";
 
 // ---------------------------------------------------------------- discovery
@@ -341,7 +343,9 @@ class Link {
     GattDeviceService service{nullptr};
     GattCharacteristic write{nullptr};
     GattCharacteristic notify{nullptr};
-    GattCharacteristic setup{nullptr};
+    GattCharacteristic setup_write{nullptr};
+    GattCharacteristic setup_notify{nullptr};
+    std::deque<ace::Bytes> setup_inbox;
 
     std::mutex m;
     std::condition_variable cv;
@@ -380,6 +384,10 @@ class Link {
         g_log.info("write  " + o.write_uuid + " [" + props_str(write.CharacteristicProperties()) + "]");
         g_log.info("notify " + o.notify_uuid + " [" + props_str(notify.CharacteristicProperties()) + "]");
 
+        // The phone registers on the setup characteristic BEFORE enabling control notifications
+        // (captures EXP-01/02); without it every control reply is NO_PERMISSIONS.
+        if (!o.no_register) do_register(o, mode);
+
         notify.ValueChanged([this](GattCharacteristic const&, GattValueChangedEventArgs const& a) {
             ace::Bytes b = from_buffer(a.CharacteristicValue());
             g_log.info("RX " + ace::to_hex(b, " ") + "   " + ace::describe(b));
@@ -389,19 +397,52 @@ class Link {
             }
             cv.notify_all();
         });
-        const auto kind = (static_cast<uint32_t>(notify.CharacteristicProperties()) & 0x10)
+        enable_notifications(notify, "control");
+    }
+
+    void enable_notifications(GattCharacteristic const& ch, const char* what) {
+        const auto kind = (static_cast<uint32_t>(ch.CharacteristicProperties()) & 0x10)
                               ? GattClientCharacteristicConfigurationDescriptorValue::Notify
                               : GattClientCharacteristicConfigurationDescriptorValue::Indicate;
-        auto st = notify.WriteClientCharacteristicConfigurationDescriptorWithResultAsync(kind).get();
-        g_log.info("enable notifications status=" + comm_status(st.Status()) + protocol_error(st.ProtocolError()));
-        if (st.Status() != GattCommunicationStatus::Success) throw std::runtime_error("cannot enable notifications");
+        auto st = ch.WriteClientCharacteristicConfigurationDescriptorWithResultAsync(kind).get();
+        g_log.info(std::string("enable ") + what + " notifications status=" + comm_status(st.Status()) + protocol_error(st.ProtocolError()));
+        if (st.Status() != GattCommunicationStatus::Success) throw std::runtime_error(std::string("cannot enable ") + what + " notifications");
+    }
 
-        if (o.register_msg) {
-            setup = find_char(ace::kSetupWriteUuid, mode);
-            if (!setup) throw std::runtime_error("setup characteristic not found (needed by --register)");
-            send_on(setup, ace::kRegistration, "setup");
-            std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    void do_register(Options const& o, BluetoothCacheMode mode) {
+        g_log.info("registration step (setup characteristics)");
+        setup_write = find_char(ace::kSetupWriteUuid, mode);
+        setup_notify = find_char(ace::kSetupNotifyUuid, mode);
+        if (!setup_write || !setup_notify) {
+            g_log.warn("setup characteristics not found: skipping registration (run 'services' to see what exists)");
+            return;
         }
+        g_log.info(std::string("setup write  ") + ace::kSetupWriteUuid + " [" + props_str(setup_write.CharacteristicProperties()) + "]");
+        g_log.info(std::string("setup notify ") + ace::kSetupNotifyUuid + " [" + props_str(setup_notify.CharacteristicProperties()) + "]");
+        setup_notify.ValueChanged([this](GattCharacteristic const&, GattValueChangedEventArgs const& a) {
+            ace::Bytes b = from_buffer(a.CharacteristicValue());
+            g_log.info("RX(setup) " + ace::to_hex(b, " "));
+            {
+                std::lock_guard<std::mutex> g(m);
+                setup_inbox.push_back(std::move(b));
+            }
+            cv.notify_all();
+        });
+        enable_notifications(setup_notify, "setup");
+
+        ace::Bytes token = ace::kCapturedToken;
+        if (o.token == "random") token = ace::random_token();
+        else if (o.token != "captured") token = ace::from_hex(o.token);
+        g_log.info("registration token: " + std::string(o.token == "captured" ? "captured (phone's)" : o.token == "random" ? "random " + ace::to_hex(token) : "custom"));
+        send_on(setup_write, ace::registration_message(token), "setup");
+
+        std::unique_lock<std::mutex> lk(m);
+        if (!cv.wait_for(lk, std::chrono::milliseconds(o.timeout_ms), [this] { return !setup_inbox.empty(); })) {
+            g_log.warn("no reply on the setup characteristic within " + std::to_string(o.timeout_ms) + " ms");
+            return;
+        }
+        const ace::Bytes r = setup_inbox.front();
+        g_log.info("registration reply: " + ace::to_hex(r, " ") + (r == ace::from_hex("01070000020000") ? "   (same as the phone got)" : "   (differs from the phone's 01 07 00 00 02 00 00)"));
     }
 
     GattCharacteristic find_char(const std::string& uuid, BluetoothCacheMode mode) {
@@ -466,7 +507,8 @@ static Options parse_options(int argc, char** argv) {
         if (a == "--quiet") o.quiet = true;
         else if (a == "--cached") o.cached = true;
         else if (a == "--no-session") o.no_session = true;
-        else if (a == "--register") o.register_msg = true;
+        else if (a == "--no-register") o.no_register = true;
+        else if (a.rfind("--token=", 0) == 0) o.token = val("--token=");
         else if (a.rfind("--log=", 0) == 0) o.log_path = val("--log=");
         else if (a.rfind("--timeout=", 0) == 0) o.timeout_ms = std::stoi(val("--timeout="));
         else if (a.rfind("--write-uuid=", 0) == 0) o.write_uuid = ace::lower(val("--write-uuid="));

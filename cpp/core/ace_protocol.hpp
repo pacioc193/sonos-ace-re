@@ -6,6 +6,7 @@
 #include <cctype>
 #include <cstdint>
 #include <iomanip>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -21,10 +22,28 @@ inline constexpr const char* kControlWriteUuid = "c44f42b1-f5cf-479b-b515-9f1bb0
 inline constexpr const char* kControlNotifyUuid = "c44f42b1-f5cf-479b-b515-9f1bb0099c9b";
 inline constexpr const char* kSetupWriteUuid = "c44f42b1-f5cf-479b-b515-9f1bb0099c9e";  // role unverified
 
-// Fixed 17-byte message seen on the secondary characteristic in both captures.
-inline const Bytes kRegistration = {0x01, 0x06, 0x04, 0x00, 0x14, 0x00, 0x00, 0x00, 0x10,
-                                    0x51, 0x46, 0x8d, 0xa4, 0x85, 0x4b, 0x7b, 0xd8,
-                                    0x81, 0x71, 0x31, 0x07, 0x05, 0xbb, 0xeb, 0xbe};
+inline constexpr const char* kSetupNotifyUuid = "c44f42b1-f5cf-479b-b515-9f1bb0099c9f";  // role unverified
+
+// "Registration" message the phone sends on the setup characteristic right before the first
+// command (25 bytes: 9-byte prefix + 16-byte token), identical in both captures. The reply
+// seen on the setup notify characteristic was `01 07 00 00 02 00 00`.
+inline const Bytes kRegistrationPrefix = {0x01, 0x06, 0x04, 0x00, 0x14, 0x00, 0x00, 0x00, 0x10};
+inline const Bytes kCapturedToken = {0x51, 0x46, 0x8d, 0xa4, 0x85, 0x4b, 0x7b, 0xd8,
+                                     0x81, 0x71, 0x31, 0x07, 0x05, 0xbb, 0xeb, 0xbe};
+
+inline Bytes registration_message(const Bytes& token) {
+    if (token.size() != 16) throw std::invalid_argument("token must be 16 bytes (32 hex digits)");
+    Bytes m = kRegistrationPrefix;
+    m.insert(m.end(), token.begin(), token.end());
+    return m;
+}
+
+inline Bytes random_token() {
+    std::random_device rd;
+    Bytes t(16);
+    for (auto& b : t) b = static_cast<uint8_t>(rd() & 0xFF);
+    return t;
+}
 
 constexpr uint8_t kCatSettings = 0x02;
 constexpr uint8_t kIdMode = 0x0F;

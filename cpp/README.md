@@ -31,7 +31,7 @@ Il log è **completo di default**: ogni passo, codice di stato Windows/GATT, han
 inviati/ricevuti, con orario, sia a console sia nel file `ace_debug_<data>.log` accanto
 all'exe. Opzioni: `--quiet` (meno righe), `--log=<file>`, `--timeout=<ms>`, `--cached`
 (usa la cache GATT di Windows invece di riscoprire), `--no-session`, `--write-uuid=`,
-`--notify-uuid=`, `--register` (invia prima il messaggio fisso di registrazione).
+`--notify-uuid=`, `--no-register` (salta la registrazione), `--token=captured|random|<32 hex>`.
 
 Se qualcosa non funziona, mandami il file `ace_debug_*.log`: contiene tutto il necessario.
 Cosa mi aspetto di poter leggere lì:
@@ -43,7 +43,8 @@ Cosa mi aspetto di poter leggere lì:
 | elenco servizi senza `0000fe07-…` | UUID diversi: dal `services` si vedono quelli veri (poi `--write-uuid=`) |
 | `characteristics ... not found` | gli UUID di controllo sono diversi: stesso rimedio |
 | `AccessDenied` / `ATT-error=0x05` / `0x0F` | serve l'associazione/cifratura: rifai l'associazione in Windows |
-| `no reply within ...` ma `write status=Success` | comando inviato, nessuna risposta: provare `--register`, o `sniff` |
+| `status=NO_PERMISSIONS` su ogni risposta | client non registrato: vedi *Registrazione* sotto |
+| `no reply within ...` ma `write status=Success` | comando inviato, nessuna risposta: provare `sniff` |
 
 ## Build locale offline (senza scaricare l'exe)
 
@@ -71,3 +72,17 @@ build\ace_tests.exe
 
 Il nucleo del protocollo (`core/ace_protocol.hpp`) è C++17 portabile, con test in `tests/`
 eseguiti anche su Linux dalla Action. L'app (`app/ace_cli.cpp`) è C++20 per le coroutine di C++/WinRT.
+
+## Registrazione
+
+Il primo test (Windows 11, 2026-10-05) ha confermato UUID e canali, ma le cuffie rispondevano
+`NO_PERMISSIONS` a ogni richiesta. Il telefono, prima del primo comando, scrive un messaggio
+fisso da 25 byte sulla caratteristica *setup* (`…9C9E`) e riceve la risposta su `…9C9F`.
+`ace.exe` ora fa lo stesso passaggio per default, prima di abilitare le notifiche di controllo.
+Cerca nel log `registration reply:` e poi lo stato dei comandi. Varianti da provare, in ordine:
+
+```bat
+ace.exe auto probe                    :: token catturato dal telefono (default)
+ace.exe auto probe --token=random     :: un token nuovo: se funziona, non serve quello del telefono
+ace.exe auto probe --no-register      :: per confronto
+```

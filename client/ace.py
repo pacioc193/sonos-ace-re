@@ -51,7 +51,7 @@ GETTERS = {
     "volume": (0x03, 0x03), "info": (0x00, 0x03), "charging": (0x00, 0x04),
 }
 
-# Fixed 17-byte message seen in both captures on the secondary characteristic (handle
+# Fixed 25-byte message seen in both captures on the secondary characteristic (handle
 # 0x004e) right before the first command. Unknown purpose; replayed as-is on request.
 REGISTRATION = bytes.fromhex("01060400140000001051468da4854b7bd88171310705bbebbe")
 
