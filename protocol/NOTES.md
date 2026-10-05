@@ -9,7 +9,8 @@ Fonti: **EXP-01/EXP-02** = catture HCI ([../captures/EXPERIMENTS.md](../captures
 identificatori di protocollo, nessun codice riprodotto qui).
 
 > **Autorizzazione:** il canale di controllo richiede un client autenticato. Senza
-> autenticazione ogni comando riceve `NO_PERMISSIONS`. Vedi [AUTH.md](AUTH.md).
+> client autorizzato ogni comando riceve `NO_PERMISSIONS`. L'autorizzazione è legata
+> all'identità Bluetooth del telefono; meccanismo in [AUTH.md](AUTH.md).
 
 ## Trasporto: GATT su BLE
 
