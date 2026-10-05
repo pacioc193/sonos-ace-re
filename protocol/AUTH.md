@@ -41,6 +41,32 @@ non è autorizzato. Questo documento distingue nettamente:
    Supported Features* (`0x2B3A`); trovando l'hash invariato riusa la mappa già nota. Perciò
    `handle↔UUID` **non** è ricavabile dalle catture del telefono finché la cache resta valida.
 
+6. Il telefono usa **indirizzi BLE privati risolvibili (RPA)**, diversi a ogni connessione
+   (misurato, EXP-09): `45:12:71…`, `71:1e:61…`, `6b:a8:4e…`, `6d:bf:1b…` (primi due bit `01`).
+   Non esiste quindi un MAC fisso da copiare: l'Ace riconosce il telefono **risolvendo l'RPA con
+   l'IRK** scambiato al pairing. ⇒ l'identità del peer è ancorata alle **chiavi del bond (IRK/LTK)**,
+   non all'indirizzo. Spoofare il MAC non basta: generare un RPA che l'Ace risolve al telefono
+   richiede **l'IRK del telefono**.
+
+## Come l'Ace valida il token (meccanismo)
+
+Il token da 16 byte **da solo non autorizza**: EXP-06 mostra gli **stessi byte** rifiutati da un
+altro peer (`80 01`). L'Ace non fa "token giusto → ok", ma **"questo token appartiene al peer che me
+lo manda?"**. Poiché la verifica è **locale** (le cuffie non hanno internet) e il telefono usa RPA,
+la catena coerente con tutte le misure è:
+
+1. il peer si connette con un RPA → l'Ace lo **risolve con l'IRK** del bond → è il controller X;
+2. il link è sul **bond** del pairing (IRK/LTK) → prova d'identità;
+3. il token presentato deve **corrispondere** a quello registrato per X.
+
+Windows fallisce ai passi 1–2 (bond diverso, chiavi proprie) → l'Ace lo vede come peer diverso/non
+registrato e il token del telefono non è legato a quell'identità → `80 01`. **In sintesi: non valida
+"il token", valida "sei il peer a cui quel token è legato"**, con l'identità ancorata alle chiavi del
+pairing. *(Confidenza: alta sul fatto che il legame sia all'identità/bond — misurato; media sul
+dettaglio dei passi. Se l'Ace faccia un confronto di uguaglianza per-identità o una verifica
+crittografica — es. HMAC — e il ruolo esatto del challenge-response AAP/DLCI 44, lo direbbe solo il
+RE del firmware dell'Ace, che non abbiamo.)*
+
 Conclusione solida: il controllo delle Sonos Ace è aperto **solo a un peer autorizzato**, e
 l'autorizzazione è vincolata al bond/identità Bluetooth. Riproporre i byte catturati da un
 altro host non basta.

@@ -164,6 +164,22 @@ Analisi delle 4 catture per rispondere a "come/quando l'app ottiene il token da 
 - In parallelo: HCI snoop del primo setup (per vedere SMP/bond + AAP + eventuale scrittura del token su `…9C9E`).
 - Esito/osservazioni: _(da compilare dopo il test)_
 
+### EXP-09 – Identità del peer = IRK (RPA), non MAC; niente prior art pubblico (2026-10-05)
+- Domanda: "se il controllo fosse solo sul MAC, posso fare spoof del MAC da Linux?"
+- Misura (HCI, comando *LE Set Random Address* in ogni cattura): il telefono usa **RPA** (Resolvable
+  Private Address) **diversi a ogni connessione** — exp01 `45:12:71:a3:83:93`, exp02 `71:1e:61:77:88:0a`,
+  exp03b `6b:a8:4e:fd:bf:81`, exp04 `6d:bf:1b:c1:77:44` (primi due bit `01`).
+- Conseguenza: **non c'è un MAC fisso da spoofare.** L'Ace riconosce il telefono risolvendo l'RPA con
+  l'**IRK** del pairing; generare un RPA che risolve al telefono richiede l'IRK del telefono. Lo spoof
+  del solo indirizzo è inutile. Dettaglio del meccanismo in [protocol/AUTH.md](../protocol/AUTH.md).
+- Vie reali: (a) **clonare il bond** del telefono (IRK+LTK+token da `bt_config.conf`, serve root sul
+  telefono → importare in BlueZ); (b) **registrare un nuovo controller** (EXP-08).
+- Ricerca prior art (web + GitHub, 2026-10-05): **nessun progetto pubblico** sul protocollo dell'Ace.
+  La ricerca dell'UUID `…9f1bb0099c9a` dà 0 risultati reali (solo falsi positivi in database di hash);
+  nessun repo "sonos ace bluetooth". Per la *classe* di problema esiste prior art su altre cuffie
+  (es. `Plutoberth/SonyHeadphonesClient`, client desktop per Sony), ma quei protocolli **non hanno**
+  questo gate di autorizzazione legato al bond: Sonos è un caso più chiuso.
+
 ### (superato) Prossimo esperimento dopo EXP-01
 Una sola azione per volta, in questo ordine, con 10 s di pausa e annotando l'ordine:
 1. ANC **on** → 2. Trasparenza (Aware) → 3. ANC off → 4. "Amplificatore suoni" on.
