@@ -32,4 +32,21 @@ stato fatto, quando e cosa si è osservato. Nome file consigliato:
 
 ## Risultati
 
-_(nessun esperimento ancora eseguito)_
+### EXP-01 – Primo log: connessione + 3 cicli di modalità (2026-10-05)
+- Dispositivo: Pixel 10 Pro, snoop HCI attivo, bugreport del 2026-10-05 10:39.
+- File: `btsnoop_hci.log` (398 588 byte, fuori dal repo – su Drive dell'utente).
+- Azioni: l'utente ha ciclato più volte tra le modalità dell'app ("ON → trasparenza →
+  OFF"); orari e ordine esatti **non annotati**.
+- Osservazioni: 9 comandi `00 02 0f vv` con vv = 02,00,01,02,00,01,02,00,01, ciascuno
+  con ack `02 02 0f 00`. Handshake/lettura iniziale con comandi `00 <cat> <id>` e
+  risposte `02 <cat> <id> …` su handle ATT 0x0044/0x0046. Nel log compaiono anche
+  Pixel Watch e un terzo dispositivo, da ignorare.
+- Conclusioni → [protocol/NOTES.md](../protocol/NOTES.md): trasporto GATT/BLE, comando
+  modalità `00 02 0f vv`. **Manca la mappatura valore → modalità.**
+- Prossimo: EXP-02 con ordine annotato (vedi sotto).
+
+### Prossimo esperimento (EXP-02, per la mappatura)
+Una sola azione per volta, in questo ordine, con 10 s di pausa e annotando l'ordine:
+1. ANC **on** → 2. Trasparenza (Aware) → 3. ANC off → 4. "Amplificatore suoni" on.
+Ripetere 2 volte. Se possibile, prima del test: dimenticare le cuffie e riassociarle
+per catturare anche la discovery GATT (UUID).
