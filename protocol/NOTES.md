@@ -77,6 +77,37 @@ cicli **trasparenza → off → cancellazione attiva**.
 - Nessun livello continuo visto (solo 3 valori distinti).
 - Ipotesi: `00 04 07` = lettura dello stato corrente della modalità (stessa codifica: 01 = ANC).
 
+### Lettura iniziale dei parametri (categoria `02`, EXP-01)
+
+All'avvio l'app interroga con `00 02 xx` tutti i parametri della categoria `02`. Valori
+letti nella sessione EXP-01 (dopo il byte di stato `00`; le lunghezze/tipi dei valori non
+sono ancora decodificati). Servono da **elenco delle funzioni** per EXP-02: gli id non
+elencati qui (es. `0f`, la modalità rumore) sono scritti solo dall'interfaccia.
+
+| id | risposta (dopo `02 02 xx`) | note |
+|---|---|---|
+| `04` | `00 03` | ? (candidato EQ/bassi: l'utente aveva bass +3/+4, ipotesi) |
+| `09` | `00 09 "Sonos Ace"` | nome dispositivo |
+| `0c` | `00 07` | ? |
+| `0e` | `00 01` | ? |
+| `10` | `00 01` | ? |
+| `12` | `00 00` | ? |
+| `18` | `02` | ? (risposta senza byte di stato) |
+| `1a` | `00 02` | ? |
+| `1c` | `00 06 00 01` | ? |
+| `21` | `00 00` | ? |
+| `27` | `00 00` | ? |
+| `29` | `05` | ? |
+| `2f`, `31`, `33`, `39`, `3b`, `3d` | `02` | ? (stesso formato di `18`) |
+| `35`, `37` | `00 01` | ? |
+
+Altre categorie lette all'avvio: `03/03` → `00 41`, `03/07` → `00 00`, `01/0c` → `00 01`,
+`01/04` → `00 00`, `05/03 <idx>` (tabella a 3 voci), `06/09` → `00 00 00`, `09/03` → `00 00 00`.
+
+**Limite**: dopo la riassociazione serve un log in modalità snoop *Abilitato* (non
+*Filtrato*): in "Filtrato" i payload ATT vengono troncati e i valori dei set (EQ, modalità)
+spariscono.
+
 ### Eventi non richiesti (notify, prefisso `01`)
 
 | Notify | Note |
