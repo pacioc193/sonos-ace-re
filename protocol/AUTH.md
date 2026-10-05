@@ -6,9 +6,13 @@ Il test da Windows (EXP-03) ha dimostrato che si può connettere il servizio di 
 dagli identificatori dell'app (package `com.sonos.sdk.accessory.setup`, non offuscato),
 **come** l'app diventa autorizzata. Nessun segreto o chiave è incluso qui.
 
-Conclusione in breve: l'autorizzazione **non è un token statico da rimandare**. È un sistema
-a tre protocolli con attestazione tramite certificato del produttore e **token rilasciati dai
-server cloud di Sonos**. Non è replicabile riusando byte catturati.
+Conclusione in breve (aggiornata con EXP-03b e l'analisi dell'handshake sul filo):
+l'autenticazione **per connessione è offline** e consiste in **una sola presentazione di un
+token "bearer"** da 16 byte, senza nonce né sfida live. Il cloud Sonos serve **una sola volta**,
+alla registrazione, per *coniare* quel token. Il token però è **legato all'identità/bond
+Bluetooth del telefono** che l'ha registrato: rimandandone i byte esatti da un altro host le
+cuffie rispondono con uno stato di rifiuto. Non è quindi riusabile senza clonare il bond del
+telefono (chiavi protette sul telefono).
 
 ## Tre sotto-protocolli
 
@@ -33,7 +37,8 @@ Implementato con chiamate HTTP ai server Sonos (classi `RegistrationService`, `R
 non negoziati solo con le cuffie.
 
 ### AAP – Accessory Authentication Protocol (autenticazione per connessione)
-È il passo che manca al nostro client. Messaggi `AAPMessageType`:
+È il passo che manca al nostro client. **Non contiene nonce** tra i suoi elementi
+(il nonce/firma sta in ASP, cioè nell'associazione iniziale, non qui). Messaggi `AAPMessageType`:
 `CLIENT_HELLO (0)`, `SERVER_HELLO (1)`, `SELECT_AUTH_METHOD (2/3)`,
 `GET_TOKEN (4/5)`, `AUTHENTICATE (6/7)`.
 Elementi (`AAPElementType`): `STATUS (0)`, `PROTO_VERSION (1)`, `FLAGS (2)`,
@@ -55,14 +60,26 @@ Crypto presente nell'app a supporto: AES-GCM, HKDF-SHA256/384, HMAC-SHA, firme (
 | Rimando del messaggio da 25 byte col token del telefono | risposta `01 07 00 00 02 **80 01**` (il telefono otteneva `… 00 00`) | token riconosciuto ma **non valido per questa sessione**: autorizzazione negata |
 | Stesso messaggio con token casuale | **disconnessione immediata**, nessuna risposta | token sconosciuto rifiutato: non è un valore arbitrario |
 
-Il token catturato è legato alla registrazione del telefono (rilasciato dal cloud). Rimandarlo
-da un altro host non concede i permessi, e non è falsificabile.
+**Handshake reale del telefono sul filo (EXP-03b, identico in entrambe le catture):** un solo
+`write` sulla caratteristica di setup (`01 06 04 00 14 00 00 00 10 <token 16 byte>`) e una sola
+notifica di risposta (`01 07 00 00 02 00 00`). Nessun altro messaggio, nessun nonce. Il token è
+**statico** (gli stessi 16 byte in due connessioni separate), quindi non è derivato per sessione.
+
+Da Windows abbiamo inviato **gli stessi identici byte** e ottenuto `01 07 00 00 02 80 01`
+(rifiuto) invece di `… 00 00`. Richiesta identica, risposta diversa: l'unica variabile è il
+**peer Bluetooth**. Il token è perciò accettato solo dal dispositivo (bond/identità) che l'ha
+registrato. Le stringhe dell'app conciliano: "private key can be used for unwrapping",
+`AndroidKeyStore`, `Creating bond with …`.
 
 ## Conseguenze per un client indipendente
 
-Per essere autorizzato come lo è l'app, un client dovrebbe completare ARP (registrazione
-cloud) e poi AAP a ogni connessione, con la crittografia del caso. È una barriera di sicurezza
-progettata apposta: **non si aggira** riusando dati catturati.
+Il muro **non** è il cloud per connessione (il controllo è offline) né un nonce live. È che il
+token da 16 byte, pur statico e in nostro possesso, è **vincolato all'identità Bluetooth del
+telefono**. Per usarlo da un altro host servirebbe presentarsi alle cuffie **come quel
+telefono**, cioè clonarne il bond BLE (LTK/IRK) o l'identità: chiavi custodite sul telefono
+(Keystore, non esportabili senza root) e, di fatto, impersonazione del dispositivo. Minare un
+token *nuovo* per un dispositivo nuovo richiede invece la registrazione ARP presso il cloud
+Sonos con la crittografia del client. Entrambe le vie restano chiuse per mezzi leciti.
 
 Resta invece pienamente valido e verificato tutto ciò che sta a valle dell'autorizzazione:
 il protocollo di controllo ACP (modalità ANC/trasparenza, EQ, balance, ecc.) in

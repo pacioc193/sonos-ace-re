@@ -53,7 +53,10 @@ GETTERS = {
 
 # Fixed 25-byte message seen in both captures on the secondary characteristic (handle
 # 0x004e) right before the first command. Unknown purpose; replayed as-is on request.
-REGISTRATION = bytes.fromhex("01060400140000001051468da4854b7bd88171310705bbebbe")
+# Registration message = 9-byte prefix + 16-byte access token. The real token is a
+# per-device credential bound to the phone (see protocol/AUTH.md) and is NOT committed;
+# the 16 bytes below are a redacted placeholder, not a working credential.
+REGISTRATION = bytes.fromhex("010604001400000010" + "00" * 16)
 
 
 def int8(value: int) -> int:

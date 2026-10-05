@@ -25,11 +25,12 @@ inline constexpr const char* kSetupWriteUuid = "c44f42b1-f5cf-479b-b515-9f1bb009
 inline constexpr const char* kSetupNotifyUuid = "c44f42b1-f5cf-479b-b515-9f1bb0099c9f";  // role unverified
 
 // "Registration" message the phone sends on the setup characteristic right before the first
-// command (25 bytes: 9-byte prefix + 16-byte token), identical in both captures. The reply
-// seen on the setup notify characteristic was `01 07 00 00 02 00 00`.
+// command (25 bytes: 9-byte prefix + 16-byte access token), identical in both captures. The
+// reply seen on the setup notify characteristic was `01 07 00 00 02 00 00` (accepted).
+// The real token is a per-device credential bound to the phone's bond (see protocol/AUTH.md):
+// it is intentionally NOT committed. Supply your own with --token=<32 hex digits>.
 inline const Bytes kRegistrationPrefix = {0x01, 0x06, 0x04, 0x00, 0x14, 0x00, 0x00, 0x00, 0x10};
-inline const Bytes kCapturedToken = {0x51, 0x46, 0x8d, 0xa4, 0x85, 0x4b, 0x7b, 0xd8,
-                                     0x81, 0x71, 0x31, 0x07, 0x05, 0xbb, 0xeb, 0xbe};
+inline const Bytes kPlaceholderToken(16, 0x00);  // redacted; not a working credential
 
 inline Bytes registration_message(const Bytes& token) {
     if (token.size() != 16) throw std::invalid_argument("token must be 16 bytes (32 hex digits)");

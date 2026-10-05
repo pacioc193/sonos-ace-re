@@ -211,7 +211,7 @@ struct Options {
     bool cached = false;
     bool no_session = false;
     bool no_register = false;
-    std::string token = "captured";  // captured | random | 32 hex digits
+    std::string token = "placeholder";  // placeholder | random | 32 hex digits
     bool quiet = false;
 };
 
@@ -237,7 +237,7 @@ options: --quiet            less logging (default: everything)
          --no-session       do not call GattSession.MaintainConnection
          --write-uuid=<u> --notify-uuid=<u>   override control characteristics
          --no-register      skip the registration step (default: register first, like the phone app)
-         --token=<x>        registration token: captured (default) | random | 32 hex digits
+         --token=<x>        registration token: your 32 hex digits (default: redacted placeholder) | random
 )";
 
 // ---------------------------------------------------------------- discovery
@@ -430,10 +430,10 @@ class Link {
         });
         enable_notifications(setup_notify, "setup");
 
-        ace::Bytes token = ace::kCapturedToken;
+        ace::Bytes token = ace::kPlaceholderToken;
         if (o.token == "random") token = ace::random_token();
-        else if (o.token != "captured") token = ace::from_hex(o.token);
-        g_log.info("registration token: " + std::string(o.token == "captured" ? "captured (phone's)" : o.token == "random" ? "random " + ace::to_hex(token) : "custom"));
+        else if (o.token != "placeholder") token = ace::from_hex(o.token);
+        g_log.info("registration token: " + std::string(o.token == "placeholder" ? "placeholder (redacted; not a working credential)" : o.token == "random" ? "random " + ace::to_hex(token) : "custom"));
         send_on(setup_write, ace::registration_message(token), "setup");
 
         std::unique_lock<std::mutex> lk(m);

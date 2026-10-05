@@ -27,7 +27,7 @@ identificatori di protocollo, nessun codice riprodotto qui).
 | Corrispondenza handle ↔ UUID | **non verificata** (discovery GATT in cache nelle catture) | – | confermare con `ace.py services` |
 
 Il messaggio fisso su `0x004e` (identico in EXP-01 ed EXP-02):
-`01 06 04 00 14 00 00 00 10 51468da4854b7bd88171310705bbebbe`, risposta notify su `0x0050`:
+`01 06 04 00 14 00 00 00 10 <16 byte: token di accesso, non incluso>`, risposta notify su `0x0050`:
 `01 07 00 00 02 00 00`. L'app contiene anche un'handshake "BLEv4" con CRC16: il legame
 con questo messaggio non è verificato. Nessuna autenticazione visibile sui comandi di controllo.
 

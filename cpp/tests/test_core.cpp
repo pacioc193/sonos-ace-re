@@ -70,8 +70,8 @@ int main() {
     CHECK(hex(ace::from_hex("00 02:0f,01")) == "00020f01");
     CHECK(throws([] { ace::from_hex("0g"); }));
     CHECK(throws([] { ace::from_hex("abc"); }));
-    CHECK(hex(ace::registration_message(ace::kCapturedToken)) == "01060400140000001051468da4854b7bd88171310705bbebbe");
-    CHECK(ace::registration_message(ace::kCapturedToken).size() == 25);
+    CHECK(hex(ace::registration_message(ace::kPlaceholderToken)) == "010604001400000010" "00000000000000000000000000000000");
+    CHECK(ace::registration_message(ace::kPlaceholderToken).size() == 25);
     CHECK(throws([] { ace::registration_message(ace::Bytes(15)); }));
     CHECK(ace::random_token().size() == 16);
 
