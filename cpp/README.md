@@ -6,8 +6,11 @@ GitHub Action `build` produce l'exe a ogni push e lo pubblica nella Release **la
 il repo è privato, quindi serve essere loggati su GitHub).
 
 Requisiti: Windows 10 1709+ / Windows 11 con Bluetooth LE, cuffie già associate a Windows.
-**Chiudi l'app Sonos sul telefono** (o disattiva il Bluetooth del telefono) prima di provare:
-le cuffie potrebbero accettare un solo collegamento di controllo alla volta.
+**Spegni il Bluetooth del telefono** (non basta chiudere l'app Sonos) prima di provare: le cuffie
+tengono il collegamento di controllo col telefono e il servizio `0xFE07` risulta `Unreachable` da
+Windows finché il telefono le occupa. Se la discovery *mirata* fallisce, il client riprova
+automaticamente con l'elenco completo e con la cache GATT di Windows (EXP-05); puoi anche forzare
+`--cached` per saltare il tentativo lento.
 
 ## Primo test (in quest'ordine)
 

@@ -16,16 +16,17 @@ identificatori di protocollo, nessun codice riprodotto qui).
 
 | Voce | Valore | Conf. | Evidenza |
 |---|---|---|---|
-| Servizio | `0000FE07-0000-1000-8000-00805F9B34FB` | P | APK (costante del servizio Sonos) |
-| `accessory_control`: scrittura / notifica | `C44F42B1-F5CF-479B-B515-9F1BB0099C9A` / `…9C9B` | P | APK; nelle catture handle `0x0044` (Write Command) / `0x0046` (Notification) |
-| `accessory_data` | `…9C9C` / `…9C9D` | P | APK (non visto nelle catture) |
-| `accessory_setup` (priorità alta) | `…9C9E` / `…9C9F` | I | APK; il messaggio fisso su handle `0x004e`/`0x0050` potrebbe essere questo canale |
-| `accessory_true_room_microphone` | `…9CA5` / `…9CA6` | P | APK |
-| Servizio batteria standard | `0000180F` / `00002A19` | P | APK |
-| Qualcomm GAIA (v3, upgrade) | `00001100-D102-11E1-9B23-00025B00A5A5`, `…1101`, `…1102`, `…1103` | P | APK (usato dall'app per l'aggiornamento firmware) |
+| Servizio | `0000FE07-0000-1000-8000-00805F9B34FB` @ decl `0x0042` | **C** | EXP-05 (discovery live da Windows) |
+| `accessory_control`: scrittura / notifica | `…9C9A` / `…9C9B` | **C** | EXP-05: decl `0x0043` [wNR] / `0x0045` [notify] → value `0x0044`/`0x0046` (= handle delle catture) |
+| `accessory_data` | `…9C9C` / `…9C9D` | **C** | EXP-05: decl `0x0048` [wNR] / `0x004a` [notify] |
+| `accessory_setup` | `…9C9E` / `…9C9F` | **C** | EXP-05: decl `0x004d` [wNR] / `0x004f` [notify] → value `0x004e`/`0x0050` (= handshake delle catture) |
+| (altre su 0xFE07) | `…9CA3` / `…9CA4` / `…9CA5` / `…9CA6` | **C** | EXP-05: decl `0x0052` [notify] / `0x0055` [read] / `0x0057` [wNR] / `0x0059` [notify] |
+| Servizio batteria standard | `0000180F` / `00002A19` | **C** | EXP-05: decl `0x003d` / `0x003e` [read,notify] |
+| Qualcomm GAIA (v3, upgrade) | `00001100-D102-11E1-9B23-00025B00A5A5`, `…1101`, `…1102`, `…1103` | **C** | EXP-05: decl `0x0010` / `0x0011` / `0x0013` / `0x0016` |
+| Altri servizi (non controllo) | GAP `0x1800`, GATT `0x1801`, Fast Pair `0xFE2C`, Qualcomm `0xEB10`/`0xFD92` | **C** | EXP-05 |
 | CCCD | `00002902`, scritto `0100` per abilitare le notifiche | C | EXP-01/02 |
-| MTU | richiesta 512 | C | EXP-01/02 |
-| Corrispondenza handle ↔ UUID | **non verificata** (discovery GATT in cache) | – | EXP-03b: il telefono rivalida la cache col *Database Hash* `0x2B2A` invece di rienumerare; confermare con `ace.py services` o cattura di un re-pairing |
+| MTU | richiesta 512 (telefono); `maxPdu=23` da Windows finché il link non la rinegozia | C | EXP-01/02; EXP-05 |
+| Corrispondenza handle ↔ UUID | **confermata** (discovery live) | **C** | EXP-05: Windows riporta l'handle di *dichiarazione*; il *value* è +1 e combacia con i write/notify delle catture del telefono |
 
 Il messaggio fisso su `0x004e` (identico in EXP-01, EXP-02, EXP-03b ed EXP-04 — 4 connessioni):
 `01 06 04 00 14 00 00 00 10 <16 byte: token di accesso, non incluso>`, risposta notify su `0x0050`:

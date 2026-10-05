@@ -95,6 +95,26 @@ stato fatto, quando e cosa si è osservato. Nome file consigliato:
   o *Forza arresto* dell'app Sonos → riapri). Per `handle↔UUID` serve un **re-pairing**
   (Dimentica + riassocia svuota la cache) **oppure** la discovery dal PC (`ace.exe auto services`).
 
+### EXP-05 – Discovery GATT live da Windows (ace.exe C++/WinRT) (2026-10-05)
+- Obiettivo: ottenere `handle↔UUID` senza toccare la cache del telefono.
+- Setup: Ace associate a Windows 11 (build 26100), `ace.exe auto get anc --token=<reale>`.
+- Esito discovery (**confermato**): enumerati 8 servizi; servizio controllo `0xFE07` @ decl `0x0042`:
+  `…9C9A`@`0x43`[wNR], `…9C9B`@`0x45`[notify], `…9C9C`@`0x48`[wNR], `…9C9D`@`0x4a`[notify],
+  `…9C9E`@`0x4d`[wNR], `…9C9F`@`0x4f`[notify], `…9CA3`@`0x52`[notify], `…9CA4`@`0x55`[read],
+  `…9CA5`@`0x57`[wNR], `…9CA6`@`0x59`[notify]. Windows riporta l'handle di **dichiarazione**; il
+  **value = +1** combacia con i write/notify delle catture del telefono (`0x44/0x46`, `0x4e/0x50`).
+  Altri servizi: GATT `0x1801` (DB hash `0x2B2A`@`0x07`, features `0x2B3A`@`0x09`), GAP `0x1800`,
+  GAIA `0x1100`, Fast Pair `0xFE2C`, Qualcomm `0xEB10`/`0xFD92`, Battery `0x180F`.
+- Problema aperto (link): la query *mirata* `GetGattServicesForUuid(FE07, Uncached)` torna
+  **`Unreachable`** (~7,7 s di timeout) anche se l'elenco completo (cache di Windows) mostra `0xFE07`;
+  al 2° tentativo il link cade (`Connected → Disconnected`), `maxPdu=23` (MTU non rinegoziata).
+  Sintomo tipico di cuffie ancora tenute dal telefono o di link LE instabile.
+- Azioni: (client) discovery resa robusta — se la query mirata fallisce si usa il servizio
+  dall'elenco completo, con fallback alla cache GATT; idem per le caratteristiche. (utente) spegnere
+  il **Bluetooth del telefono** (non solo chiudere l'app) e rilanciare; eventualmente `--cached`.
+- Da verificare al prossimo giro: con il telefono spento, se l'handshake su `…9C9E` riceve
+  `… 00 00` (accettato) o `… 80 01` (rifiutato) con `--token=<reale>`.
+
 ### (superato) Prossimo esperimento dopo EXP-01
 Una sola azione per volta, in questo ordine, con 10 s di pausa e annotando l'ordine:
 1. ANC **on** → 2. Trasparenza (Aware) → 3. ANC off → 4. "Amplificatore suoni" on.

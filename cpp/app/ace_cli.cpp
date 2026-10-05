@@ -334,6 +334,28 @@ static void dump_services(BluetoothLEDevice const& dev, BluetoothCacheMode mode)
     }
 }
 
+// Find the 0xFE07 service robustly: a targeted by-UUID query often returns Unreachable on a
+// fresh LE link even though the full enumeration (served from Windows' cache) lists the service
+// fine. So try the targeted query first, then fall back to scanning the full list.
+static GattDeviceService find_fe07_service(BluetoothLEDevice const& dev, BluetoothCacheMode mode) {
+    const auto target = parse_guid(ace::kServiceUuid);
+    auto r = dev.GetGattServicesForUuidAsync(target, mode).get();
+    g_log.info("  by-uuid status=" + comm_status(r.Status()) + protocol_error(r.ProtocolError()) +
+               " found=" + std::to_string(r.Services().Size()));
+    if (r.Status() == GattCommunicationStatus::Success && r.Services().Size() > 0)
+        return r.Services().GetAt(0);
+    auto all = dev.GetGattServicesAsync(mode).get();
+    g_log.info("  full-list status=" + comm_status(all.Status()) + protocol_error(all.ProtocolError()) +
+               " services=" + std::to_string(all.Services().Size()));
+    if (all.Status() == GattCommunicationStatus::Success)
+        for (auto const& svc : all.Services())
+            if (svc.Uuid() == target) {
+                g_log.info("  found 0xFE07 in the full service list");
+                return svc;
+            }
+    return GattDeviceService{nullptr};
+}
+
 // ---------------------------------------------------------------- connection
 
 class Link {
@@ -363,17 +385,21 @@ class Link {
             g_log.info("GATT session status=" + std::to_string(static_cast<int>(session.SessionStatus())) +
                        " (0=Closed,1=Active) maxPdu=" + std::to_string(session.MaxPduSize()));
         }
-        const auto mode = o.cached ? BluetoothCacheMode::Cached : BluetoothCacheMode::Uncached;
+        auto mode = o.cached ? BluetoothCacheMode::Cached : BluetoothCacheMode::Uncached;
         g_log.info(std::string("discovering service ") + ace::kServiceUuid + (o.cached ? " (cached)" : " (uncached)"));
-        auto svcs = dev.GetGattServicesForUuidAsync(parse_guid(ace::kServiceUuid), mode).get();
-        g_log.info("  status=" + comm_status(svcs.Status()) + protocol_error(svcs.ProtocolError()) +
-                   " found=" + std::to_string(svcs.Services().Size()));
-        if (svcs.Status() != GattCommunicationStatus::Success || svcs.Services().Size() == 0) {
+        service = find_fe07_service(dev, mode);
+        if (!service && mode != BluetoothCacheMode::Cached) {
+            g_log.warn("uncached discovery failed (Unreachable is common on a fresh link); retrying with cached GATT data");
+            mode = BluetoothCacheMode::Cached;
+            service = find_fe07_service(dev, mode);
+        }
+        if (!service) {
             g_log.error("service not found; full service list follows");
-            dump_services(dev, mode);
+            dump_services(dev, BluetoothCacheMode::Cached);
             throw std::runtime_error("Sonos service 0xFE07 not available (headphones connected to another host? not paired?)");
         }
-        service = svcs.Services().GetAt(0);
+        // From here on use the cache mode that actually produced the service, so the
+        // characteristic lookups below don't re-hit the same Unreachable path.
         write = find_char(o.write_uuid, mode);
         notify = find_char(o.notify_uuid, mode);
         if (!write || !notify) {
@@ -446,10 +472,20 @@ class Link {
     }
 
     GattCharacteristic find_char(const std::string& uuid, BluetoothCacheMode mode) {
-        auto r = service.GetCharacteristicsForUuidAsync(parse_guid(uuid), mode).get();
+        const auto g = parse_guid(uuid);
+        auto r = service.GetCharacteristicsForUuidAsync(g, mode).get();
         g_log.debug("characteristic " + uuid + " status=" + comm_status(r.Status()) + " found=" + std::to_string(r.Characteristics().Size()));
-        if (r.Status() != GattCommunicationStatus::Success || r.Characteristics().Size() == 0) return nullptr;
-        return r.Characteristics().GetAt(0);
+        if (r.Status() == GattCommunicationStatus::Success && r.Characteristics().Size() > 0)
+            return r.Characteristics().GetAt(0);
+        // Fallback: enumerate all characteristics of the service and match by UUID (the targeted
+        // query can return Unreachable even when the full list is available from cache).
+        for (auto m : {mode, BluetoothCacheMode::Cached}) {
+            auto all = service.GetCharacteristicsAsync(m).get();
+            if (all.Status() != GattCommunicationStatus::Success) continue;
+            for (auto const& ch : all.Characteristics())
+                if (ch.Uuid() == g) return ch;
+        }
+        return GattCharacteristic{nullptr};
     }
 
     bool send_on(GattCharacteristic const& ch, const ace::Bytes& b, const char* what) {
