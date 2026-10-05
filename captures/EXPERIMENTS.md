@@ -53,7 +53,7 @@ stato fatto, quando e cosa si è osservato. Nome file consigliato:
   treble `1f`, balance `22`: int8 -10…+10, un comando per passo di slider. Handshake `0x4e`
   identico a EXP-01. Discovery GATT ancora in cache: UUID non ottenuti.
 - Conclusioni → [protocol/NOTES.md](../protocol/NOTES.md).
-- Cause del log filtrato in precedenza: snoop non riavviato dopo il cambio di modalità.
+- Log filtrato del tentativo precedente: causa probabile (non verificata) = Bluetooth non riavviato dopo il cambio di modalità snoop.
 
 ### (superato) Prossimo esperimento dopo EXP-01
 Una sola azione per volta, in questo ordine, con 10 s di pausa e annotando l'ordine:
