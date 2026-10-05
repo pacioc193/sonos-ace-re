@@ -1,0 +1,52 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    paths: ['cpp/**', '.github/workflows/build.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  core-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Protocol core tests (g++)
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -o ace_tests cpp/tests/test_core.cpp
+          ./ace_tests
+      - name: Python tests
+        run: python3 -m unittest discover -s tests
+
+  windows:
+    runs-on: windows-latest
+    needs: core-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Configure
+        run: cmake -S cpp -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build
+      - name: Core tests (MSVC)
+        run: build\ace_tests.exe
+      - name: Smoke test (help)
+        run: build\ace.exe help
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ace-windows
+          path: build/ace.exe
+      - name: Publish rolling release 'latest'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp build/ace.exe ace.exe
+          sha=$(git rev-parse --short HEAD)
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest ace.exe --prerelease \
+            --title "ace.exe (build $sha)" \
+            --notes "Automatic build of commit $sha. Run: ace.exe help. Verbose log is written to ace_debug_<date>.log next to the exe."
